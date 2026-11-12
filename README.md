@@ -7,6 +7,11 @@
 [![Rust Backend](https://img.shields.io/badge/Rust-MSVC-DEA584?logo=rust)](https://rust-lang.org)
 [![React 19 + TypeScript](https://img.shields.io/badge/React-19%20%7C%20TypeScript-61DAFB?logo=react)](https://react.dev)
 [![Strict Dark UI](https://img.shields.io/badge/UI-Precision%20Industrial%20Matte-191E28)](https://github.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+<p align="center">
+  <img src="docs/images/app-screenshot.png" alt="NUMPAD DECK Workspace Preview" width="850" style="border-radius: 12px; border: 1px solid #252C39; box-shadow: 0 20px 40px rgba(0,0,0,0.6);" />
+</p>
 
 ---
 
@@ -122,20 +127,14 @@ The deck workspace accurately mirrors physical mechanical numpad dimensions:
 
 ---
 
-## 5. Emergency Fail-Safe Recovery
+## 5. Technologies Used
 
-If a macro or script enters an unwanted loop while in Deck Mode:
-
-> [!IMPORTANT]
-> **Emergency Disarm**: Press the **`ESC`** key **3 times within 1.2 seconds**.
-> 
-> The low-level keyboard hook immediately:
-> 1. Resets engine mode to **Normal Mode**.
-> 2. Disables all key suppression.
-> 3. Flushes active key-down tracking states.
-> 4. Broadcasts an emergency notice to the UI.
-> 
-> Closing the application cleanly unhooks `WH_KEYBOARD_LL` via `UnhookWindowsHookEx`.
+- **Framework**: [Tauri 2.0](https://tauri.app/) (Rust MSVC native bridge)
+- **Backend Language**: [Rust 2021](https://www.rust-lang.org/) with `windows-sys` (Win32 low-level hooks, GDI, Shell API, SendInput)
+- **Frontend Stack**: [React 19](https://react.dev/), [TypeScript 5](https://www.typescriptlang.org/), [Vite](https://vitejs.dev/)
+- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) with custom dark matte tokens
+- **Icons**: [Lucide React](https://lucide.dev/) + 16 custom brand SVGs
+- **Concurrency & Hooking**: `parking_lot::RwLock`, `crossbeam_channel`, native Windows message pump
 
 ---
 
@@ -184,3 +183,21 @@ All 7 unit tests passed with 0 failures:
 - [ ] **Test NumLock Toggle**:
   - Toggle physical NumLock button on your keyboard.
   - Verify the top bar and diagnostics update between `NumLock: ON` and `NumLock: OFF`.
+
+---
+
+## 8. Contributing
+
+Contributions are welcome! If you encounter atypical keyboard hardware, unusual scan codes on international keyboards, or want to add presets:
+
+1. Fork the repository.
+2. Create a feature branch: `git checkout -b feature/hardware-preset`.
+3. Verify all tests pass: `cargo test --manifest-path src-tauri/Cargo.toml` and `npm run build`.
+4. Commit your changes: `git commit -m "feat: add support for XYZ keyboard layout"`.
+5. Push to the branch and open a Pull Request.
+
+---
+
+## 9. License
+
+This project is open-source under the [MIT License](LICENSE).
