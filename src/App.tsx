@@ -32,6 +32,7 @@ export const App: React.FC = () => {
   const [recentTestEvents, setRecentTestEvents] = useState<any[]>([]);
   const [lastTestedKey, setLastTestedKey] = useState<NumpadKey | null>(null);
   const [lastRawKey, setLastRawKey] = useState<RawKeyEvent | null>(null);
+  const [isTestActive, setIsTestActive] = useState<boolean>(true);
 
   const stateRef = useRef(deckState);
   stateRef.current = deckState;
@@ -102,6 +103,9 @@ export const App: React.FC = () => {
 
       listen<RawKeyEvent>('deck-raw-key', (event) => {
         setLastRawKey(event.payload);
+        if (event.payload.numlock_on !== undefined) {
+          setDetectionReport((prev) => prev ? { ...prev, numlock_on: event.payload.numlock_on } : null);
+        }
       }),
 
       listen<string | null>('active-folder-changed', (event) => {
@@ -443,6 +447,57 @@ export const App: React.FC = () => {
     setCurrentTab('deck');
   };
 
+  const handleToggleTestMode = async () => {
+    const next = !isTestActive;
+    setIsTestActive(next);
+    try {
+      await invoke('set_test_mode', { enabled: next });
+    } catch (err) {
+      console.error('Failed to toggle test mode:', err);
+    }
+  };
+
+  const handleSaveCustomMapping = async (signature: string, key: NumpadKey) => {
+    try {
+      await invoke('save_custom_mapping', { signature, key });
+      if (deckState) {
+        const updated = {
+          ...deckState,
+          settings: {
+            ...deckState.settings,
+            custom_key_mappings: {
+              ...(deckState.settings.custom_key_mappings || {}),
+              [signature]: key,
+            },
+          },
+        };
+        setDeckState(updated);
+      }
+    } catch (err) {
+      console.error('Failed to save custom mapping:', err);
+    }
+  };
+
+  const handleRemoveCustomMapping = async (signature: string) => {
+    try {
+      await invoke('remove_custom_mapping', { signature });
+      if (deckState && deckState.settings.custom_key_mappings) {
+        const updatedMappings = { ...deckState.settings.custom_key_mappings };
+        delete updatedMappings[signature];
+        const updated = {
+          ...deckState,
+          settings: {
+            ...deckState.settings,
+            custom_key_mappings: updatedMappings,
+          },
+        };
+        setDeckState(updated);
+      }
+    } catch (err) {
+      console.error('Failed to remove custom mapping:', err);
+    }
+  };
+
   return (
     <div
       style={{
@@ -522,6 +577,11 @@ export const App: React.FC = () => {
           onToggleDeckMode={handleToggleDeckMode}
           lastRawKey={lastRawKey}
           onToggleNumlock={handleToggleNumlock}
+          onSaveCustomMapping={handleSaveCustomMapping}
+          onRemoveCustomMapping={handleRemoveCustomMapping}
+          customMappings={deckState.settings.custom_key_mappings || {}}
+          isTestActive={isTestActive}
+          onToggleTestMode={handleToggleTestMode}
         />
       )}
 

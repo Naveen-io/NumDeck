@@ -1,7 +1,7 @@
 use crate::actions::SYNTHETIC_EXTRA_INFO;
 use crate::types::*;
 use parking_lot::Mutex;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
@@ -14,24 +14,34 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 static HOOK_HANDLE: AtomicIsize = AtomicIsize::new(0);
 static HOOK_THREAD_ID: AtomicU32 = AtomicU32::new(0);
 static DECK_ACTIVE: AtomicBool = AtomicBool::new(true);
-static TEST_MODE: AtomicBool = AtomicBool::new(false);
+static TEST_MODE: AtomicBool = AtomicBool::new(true); // Default true so diagnostics receives live input immediately
 static COMPACT_LAPTOP_MODE: AtomicBool = AtomicBool::new(false);
 
 static DOWN_KEYS: Mutex<Option<HashSet<NumpadKey>>> = Mutex::new(None);
 static GLOBAL_APP_HANDLE: Mutex<Option<AppHandle>> = Mutex::new(None);
 static ON_KEY_TRIGGER: Mutex<Option<Arc<dyn Fn(NumpadKey) + Send + Sync>>> = Mutex::new(None);
 static HOTKEY_CONFIG: Mutex<Option<HotkeyConfig>> = Mutex::new(None);
+static CUSTOM_MAPPINGS: Mutex<Option<HashMap<String, NumpadKey>>> = Mutex::new(None);
 
 pub struct KeyboardEngine;
 
 impl KeyboardEngine {
-    pub fn init<F>(app: AppHandle, is_active: bool, hotkey: HotkeyConfig, on_key: F)
-    where
+    pub fn init<F>(
+        app: AppHandle,
+        is_active: bool,
+        hotkey: HotkeyConfig,
+        compact_mode: bool,
+        custom_mappings: HashMap<String, NumpadKey>,
+        on_key: F,
+    ) where
         F: Fn(NumpadKey) + Send + Sync + 'static,
     {
         DECK_ACTIVE.store(is_active, Ordering::SeqCst);
+        COMPACT_LAPTOP_MODE.store(compact_mode, Ordering::SeqCst);
+        TEST_MODE.store(true, Ordering::SeqCst);
         *DOWN_KEYS.lock() = Some(HashSet::new());
         *HOTKEY_CONFIG.lock() = Some(hotkey);
+        *CUSTOM_MAPPINGS.lock() = Some(custom_mappings);
         *GLOBAL_APP_HANDLE.lock() = Some(app);
         *ON_KEY_TRIGGER.lock() = Some(Arc::new(on_key));
 
@@ -67,12 +77,41 @@ impl KeyboardEngine {
         TEST_MODE.store(enabled, Ordering::SeqCst);
     }
 
+    pub fn is_test_mode() -> bool {
+        TEST_MODE.load(Ordering::SeqCst)
+    }
+
     pub fn set_compact_mode(enabled: bool) {
         COMPACT_LAPTOP_MODE.store(enabled, Ordering::SeqCst);
     }
 
     pub fn update_hotkey(hotkey: HotkeyConfig) {
         *HOTKEY_CONFIG.lock() = Some(hotkey);
+    }
+
+    pub fn set_custom_mappings(mappings: HashMap<String, NumpadKey>) {
+        *CUSTOM_MAPPINGS.lock() = Some(mappings);
+    }
+
+    pub fn add_custom_mapping(signature: String, key: NumpadKey) {
+        let mut guard = CUSTOM_MAPPINGS.lock();
+        if let Some(map) = guard.as_mut() {
+            map.insert(signature, key);
+        } else {
+            let mut map = HashMap::new();
+            map.insert(signature, key);
+            *guard = Some(map);
+        }
+    }
+
+    pub fn remove_custom_mapping(signature: &str) {
+        if let Some(map) = CUSTOM_MAPPINGS.lock().as_mut() {
+            map.remove(signature);
+        }
+    }
+
+    pub fn get_custom_mappings() -> HashMap<String, NumpadKey> {
+        CUSTOM_MAPPINGS.lock().clone().unwrap_or_default()
     }
 
     pub fn toggle_numlock() -> bool {
@@ -194,28 +233,42 @@ impl KeyboardEngine {
             return LRESULT(1);
         }
 
-        let maybe_numpad_key = Self::identify_numpad_key(&kbd);
-        let is_test = TEST_MODE.load(Ordering::SeqCst);
+        let numlock_on = unsafe { (GetKeyState(VK_NUMLOCK.0 as i32) & 0x0001) != 0 };
+        let is_extended = (kbd.flags.0 & LLKHF_EXTENDED.0) != 0;
+        let scan_byte = (kbd.scanCode & 0xFF) as u8;
+        let vk_name = vk_to_name(kbd.vkCode).to_string();
 
-        // In test mode, always stream raw key info so diagnostics and onboarding can show ANY key pressed!
-        if is_test && is_key_down {
+        let maybe_numpad_key = Self::identify_numpad_key(&kbd);
+        let key_name = match maybe_numpad_key {
+            Some(k) => k.display_name().to_string(),
+            None => format!("Unassigned (0x{:X})", kbd.vkCode),
+        };
+
+        let now = format_time_now();
+
+        // 1. Diagnostics event stream: Broadcast raw event for live UI inspection
+        if TEST_MODE.load(Ordering::SeqCst) {
             if let Some(app) = GLOBAL_APP_HANDLE.lock().as_ref() {
-                let _ = app.emit(
-                    "deck-raw-key",
-                    serde_json::json!({
-                        "vk": kbd.vkCode,
-                        "scan": kbd.scanCode,
-                        "is_extended": (kbd.flags.0 & LLKHF_EXTENDED.0) != 0,
-                        "mapped_key": maybe_numpad_key,
-                    }),
-                );
+                let raw_event = RawKeyEvent {
+                    vk: kbd.vkCode,
+                    vk_name: vk_name.clone(),
+                    scan: kbd.scanCode,
+                    scan_byte,
+                    is_extended,
+                    is_down: is_key_down,
+                    numlock_on,
+                    mapped_key: maybe_numpad_key,
+                    key_name: key_name.clone(),
+                    device_name: Some("Integrated Laptop / Windows Keyboard".to_string()),
+                    timestamp: now.clone(),
+                };
+                let _ = app.emit("deck-raw-key", raw_event);
             }
         }
 
-        // Check if this key corresponds to a physical numpad key
+        // 2. Handling of detected Numpad Keys
         if let Some(numpad_key) = maybe_numpad_key {
-            if is_test {
-                // Emit test event to frontend
+            if TEST_MODE.load(Ordering::SeqCst) {
                 if let Some(app) = GLOBAL_APP_HANDLE.lock().as_ref() {
                     let _ = app.emit(
                         "deck-key-test",
@@ -223,7 +276,10 @@ impl KeyboardEngine {
                             "key": numpad_key,
                             "down": is_key_down,
                             "vk": kbd.vkCode,
-                            "scan": kbd.scanCode
+                            "scan": kbd.scanCode,
+                            "is_extended": is_extended,
+                            "numlock_on": numlock_on,
+                            "timestamp": now,
                         }),
                     );
                 }
@@ -262,18 +318,19 @@ impl KeyboardEngine {
                             );
                         }
                     }
-                    // Suppress key-down
+                    // Suppress key-down in Deck Mode
                     return LRESULT(1);
                 } else if is_key_up {
                     if let Some(down_keys) = DOWN_KEYS.lock().as_mut() {
                         down_keys.remove(&numpad_key);
                     }
-                    // Suppress key-up
+                    // Suppress key-up in Deck Mode
                     return LRESULT(1);
                 }
             }
         }
 
+        // When Deck Mode is inactive, or for unmapped non-numpad keys, pass through normally
         unsafe { CallNextHookEx(None, code, wparam, lparam) }
     }
 
@@ -319,7 +376,26 @@ impl KeyboardEngine {
     pub fn identify_numpad_key(kbd: &KBDLLHOOKSTRUCT) -> Option<NumpadKey> {
         let is_extended = (kbd.flags.0 & LLKHF_EXTENDED.0) != 0;
         let vk = kbd.vkCode;
-        let scan = kbd.scanCode;
+        let scan_byte = (kbd.scanCode & 0xFF) as u8;
+
+        // 0. Check custom key mappings first (allows manual assignment for any unusual laptop key)
+        {
+            let custom_guard = CUSTOM_MAPPINGS.lock();
+            if let Some(ref map) = *custom_guard {
+                let sig_full = format!("0x{:X}_0x{:X}_{}", vk, scan_byte, is_extended);
+                if let Some(mapped) = map.get(&sig_full) {
+                    return Some(*mapped);
+                }
+                let sig_vk = format!("0x{:X}", vk);
+                if let Some(mapped) = map.get(&sig_vk) {
+                    return Some(*mapped);
+                }
+                let sig_scan = format!("scan_0x{:X}", scan_byte);
+                if let Some(mapped) = map.get(&sig_scan) {
+                    return Some(*mapped);
+                }
+            }
+        }
 
         // 1. Direct Virtual-Key codes with NumLock ON
         match vk {
@@ -342,35 +418,42 @@ impl KeyboardEngine {
             _ => {}
         }
 
-        // 2. Hardware scan codes: Directly identify physical numpad keys regardless of NumLock state
-        // and regardless of whether the laptop controller set the extended flag!
-        match scan {
-            0x45 => return Some(NumpadKey::NumLock),
-            0x35 => return Some(NumpadKey::Divide),
-            0x37 => return Some(NumpadKey::Multiply),
-            0x4A => return Some(NumpadKey::Subtract),
-            0x4E => return Some(NumpadKey::Plus),
-            0x47 => return Some(NumpadKey::Num7),
-            0x48 => return Some(NumpadKey::Num8),
-            0x49 => return Some(NumpadKey::Num9),
-            0x4B => return Some(NumpadKey::Num4),
-            0x4C => return Some(NumpadKey::Num5),
-            0x4D => return Some(NumpadKey::Num6),
-            0x4F => return Some(NumpadKey::Num1),
-            0x50 => return Some(NumpadKey::Num2),
-            0x51 => return Some(NumpadKey::Num3),
-            0x52 => return Some(NumpadKey::Num0),
-            0x53 => return Some(NumpadKey::Decimal),
-            _ => {}
-        }
-
-        // 3. Numpad Enter (VK_RETURN with extended flag or scan code 0x1C with extended)
-        if (vk == VK_RETURN.0 as u32 && is_extended) || (scan == 0x1C && is_extended) {
+        // 2. Numpad Enter (VK_RETURN with extended flag or scan code 0x1C with extended)
+        // Main keyboard Enter does NOT have LLKHF_EXTENDED set
+        if (vk == VK_RETURN.0 as u32 || scan_byte == 0x1C) && is_extended {
             return Some(NumpadKey::Enter);
         }
 
-        // 4. Navigation virtual keys when NumLock is OFF (Physical numpad keys are non-extended)
+        // 3. Numpad Divide: scan code 0x35 with extended flag, or VK 0x6F
+        if (scan_byte == 0x35 && is_extended) || vk == 0x6F {
+            return Some(NumpadKey::Divide);
+        }
+
+        // 4. Physical scan codes & Navigation virtual keys when NumLock is OFF:
+        // On PC architecture, physical numpad navigation keys are standard (non-extended),
+        // whereas dedicated navigation keys (arrow keys, dedicated Home/End) have LLKHF_EXTENDED set.
         if !is_extended {
+            // Match by physical scan code
+            match scan_byte {
+                0x45 => return Some(NumpadKey::NumLock),
+                0x37 => return Some(NumpadKey::Multiply),
+                0x4A => return Some(NumpadKey::Subtract),
+                0x4E => return Some(NumpadKey::Plus),
+                0x47 => return Some(NumpadKey::Num7),
+                0x48 => return Some(NumpadKey::Num8),
+                0x49 => return Some(NumpadKey::Num9),
+                0x4B => return Some(NumpadKey::Num4),
+                0x4C => return Some(NumpadKey::Num5),
+                0x4D => return Some(NumpadKey::Num6),
+                0x4F => return Some(NumpadKey::Num1),
+                0x50 => return Some(NumpadKey::Num2),
+                0x51 => return Some(NumpadKey::Num3),
+                0x52 => return Some(NumpadKey::Num0),
+                0x53 => return Some(NumpadKey::Decimal),
+                _ => {}
+            }
+
+            // Fallback match by navigation Virtual Key for NumLock OFF
             match vk {
                 0x2D => return Some(NumpadKey::Num0),    // Insert -> 0
                 0x23 => return Some(NumpadKey::Num1),    // End -> 1
@@ -411,6 +494,75 @@ impl KeyboardEngine {
 
         None
     }
+}
+
+pub fn vk_to_name(vk: u32) -> &'static str {
+    match vk {
+        0x60 => "VK_NUMPAD0",
+        0x61 => "VK_NUMPAD1",
+        0x62 => "VK_NUMPAD2",
+        0x63 => "VK_NUMPAD3",
+        0x64 => "VK_NUMPAD4",
+        0x65 => "VK_NUMPAD5",
+        0x66 => "VK_NUMPAD6",
+        0x67 => "VK_NUMPAD7",
+        0x68 => "VK_NUMPAD8",
+        0x69 => "VK_NUMPAD9",
+        0x6A => "VK_MULTIPLY",
+        0x6B => "VK_ADD",
+        0x6D => "VK_SUBTRACT",
+        0x6E => "VK_DECIMAL",
+        0x6F => "VK_DIVIDE",
+        0x90 => "VK_NUMLOCK",
+        0x0D => "VK_RETURN",
+        0x24 => "VK_HOME",
+        0x26 => "VK_UP",
+        0x21 => "VK_PRIOR",
+        0x25 => "VK_LEFT",
+        0x0C => "VK_CLEAR",
+        0x27 => "VK_RIGHT",
+        0x23 => "VK_END",
+        0x28 => "VK_DOWN",
+        0x22 => "VK_NEXT",
+        0x2D => "VK_INSERT",
+        0x2E => "VK_DELETE",
+        0x1B => "VK_ESCAPE",
+        0x08 => "VK_BACK",
+        0x09 => "VK_TAB",
+        0x20 => "VK_SPACE",
+        0x10 => "VK_SHIFT",
+        0x11 => "VK_CONTROL",
+        0x12 => "VK_MENU (ALT)",
+        0x30 => "VK_0",
+        0x31 => "VK_1",
+        0x32 => "VK_2",
+        0x33 => "VK_3",
+        0x34 => "VK_4",
+        0x35 => "VK_5",
+        0x36 => "VK_6",
+        0x37 => "VK_7",
+        0x38 => "VK_8",
+        0x39 => "VK_9",
+        0xBA => "VK_OEM_1 (;)",
+        0xBB => "VK_OEM_PLUS (+)",
+        0xBC => "VK_OEM_COMMA (,)",
+        0xBD => "VK_OEM_MINUS (-)",
+        0xBE => "VK_OEM_PERIOD (.)",
+        0xBF => "VK_OEM_2 (/)",
+        0xC0 => "VK_OEM_3 (`)",
+        _ => "VK_OTHER",
+    }
+}
+
+fn format_time_now() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let dur = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let secs = dur.as_secs();
+    let millis = dur.subsec_millis();
+    let hours = (secs / 3600) % 24;
+    let minutes = (secs / 60) % 60;
+    let seconds = secs % 60;
+    format!("{:02}:{:02}:{:02}.{:03}", hours, minutes, seconds, millis)
 }
 
 fn match_hotkey_key(key: &str) -> u32 {
@@ -470,44 +622,43 @@ mod tests {
 
     #[test]
     fn test_numpad_keys_numlock_off() {
-        // When NumLock is OFF, physical 7 sends scan code 0x47
+        // When NumLock is OFF, physical 7 sends scan code 0x47 with non-extended
         let numpad_7_numlock_off = make_kbd(0x24, 0x47, false);
         assert_eq!(KeyboardEngine::identify_numpad_key(&numpad_7_numlock_off), Some(NumpadKey::Num7));
 
-        // When NumLock is OFF, physical 0 sends scan code 0x52
+        // When NumLock is OFF, physical 0 sends scan code 0x52 with non-extended
         let numpad_0_numlock_off = make_kbd(0x2D, 0x52, false);
         assert_eq!(KeyboardEngine::identify_numpad_key(&numpad_0_numlock_off), Some(NumpadKey::Num0));
     }
 
     #[test]
-    fn test_operators() {
-        let divide = make_kbd(0x6F, 0x35, true);
-        assert_eq!(KeyboardEngine::identify_numpad_key(&divide), Some(NumpadKey::Divide));
+    fn test_dedicated_arrow_keys_not_mistaken_for_numpad() {
+        // Dedicated Up Arrow key has scan 0x48 BUT is_extended is true!
+        let dedicated_up_arrow = make_kbd(0x26, 0x48, true);
+        assert_eq!(KeyboardEngine::identify_numpad_key(&dedicated_up_arrow), None);
 
+        // Dedicated Left Arrow has scan 0x4B BUT is_extended is true!
+        let dedicated_left_arrow = make_kbd(0x25, 0x4B, true);
+        assert_eq!(KeyboardEngine::identify_numpad_key(&dedicated_left_arrow), None);
+    }
+
+    #[test]
+    fn test_operators() {
         let multiply = make_kbd(0x6A, 0x37, false);
         assert_eq!(KeyboardEngine::identify_numpad_key(&multiply), Some(NumpadKey::Multiply));
 
         let add = make_kbd(0x6B, 0x4E, false);
         assert_eq!(KeyboardEngine::identify_numpad_key(&add), Some(NumpadKey::Plus));
 
-        let subtract = make_kbd(0x6D, 0x4A, false);
-        assert_eq!(KeyboardEngine::identify_numpad_key(&subtract), Some(NumpadKey::Subtract));
+        let divide = make_kbd(0x6F, 0x35, true);
+        assert_eq!(KeyboardEngine::identify_numpad_key(&divide), Some(NumpadKey::Divide));
     }
 
     #[test]
-    fn test_hook_install() {
-        unsafe {
-            let hinst = GetModuleHandleW(None).unwrap();
-            let hook1 = SetWindowsHookExW(
-                WH_KEYBOARD_LL,
-                Some(KeyboardEngine::low_level_keyboard_proc),
-                HINSTANCE(hinst.0),
-                0,
-            );
-            println!("Hook with GetModuleHandleW: {:?}", hook1.is_ok());
-            if let Ok(h) = hook1 {
-                let _ = UnhookWindowsHookEx(h);
-            }
-        }
+    fn test_custom_key_mapping_override() {
+        // Map an arbitrary scan code / key signature to NumpadKey::Enter
+        KeyboardEngine::add_custom_mapping("0xFF_0xAA_false".to_string(), NumpadKey::Enter);
+        let custom_key = make_kbd(0xFF, 0xAA, false);
+        assert_eq!(KeyboardEngine::identify_numpad_key(&custom_key), Some(NumpadKey::Enter));
     }
 }

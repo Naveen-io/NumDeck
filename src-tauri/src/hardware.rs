@@ -5,7 +5,8 @@ use windows::Win32::UI::Input::*;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyboardDeviceInfo {
     pub name: String,
-    pub is_usb_or_internal: bool,
+    pub device_id: String,
+    pub is_internal: bool,
     pub function_keys: u32,
     pub indicators: u32,
 }
@@ -16,6 +17,7 @@ pub struct HardwareDetectionReport {
     pub keyboards_found: usize,
     pub keyboards: Vec<KeyboardDeviceInfo>,
     pub numpad_ready: bool,
+    pub primary_device: String,
 }
 
 pub struct HardwareManager;
@@ -45,6 +47,38 @@ impl HardwareManager {
                 if fetched != u32::MAX {
                     for dev in &raw_list[..fetched as usize] {
                         if dev.dwType == RIM_TYPEKEYBOARD {
+                            // 1. Query device name via RIDI_DEVICENAME
+                            let mut name_size: u32 = 0;
+                            let _ = GetRawInputDeviceInfoW(dev.hDevice, RIDI_DEVICENAME, None, &mut name_size);
+                            let raw_name = if name_size > 0 {
+                                let mut buf = vec![0u16; name_size as usize];
+                                let get_res = GetRawInputDeviceInfoW(
+                                    dev.hDevice,
+                                    RIDI_DEVICENAME,
+                                    Some(buf.as_mut_ptr() as *mut _),
+                                    &mut name_size,
+                                );
+                                if get_res != u32::MAX && get_res > 0 {
+                                    String::from_utf16_lossy(&buf[..get_res as usize - 1])
+                                } else {
+                                    String::new()
+                                }
+                            } else {
+                                String::new()
+                            };
+
+                            let is_internal = raw_name.to_uppercase().contains("ACPI")
+                                || raw_name.to_uppercase().contains("PNP0303");
+
+                            let clean_name = if is_internal {
+                                "Integrated Laptop Keyboard (ACPI)".to_string()
+                            } else if raw_name.to_uppercase().contains("HID") {
+                                "Standard / HID Keyboard".to_string()
+                            } else {
+                                format!("Physical Keyboard ({})", dev.hDevice.0 as usize)
+                            };
+
+                            // 2. Query device info via RIDI_DEVICEINFO
                             let mut info = RID_DEVICE_INFO::default();
                             info.cbSize = std::mem::size_of::<RID_DEVICE_INFO>() as u32;
                             let mut info_size = info.cbSize;
@@ -64,8 +98,13 @@ impl HardwareManager {
                             };
 
                             keyboards.push(KeyboardDeviceInfo {
-                                name: format!("Physical Keyboard #{:?}", dev.hDevice.0),
-                                is_usb_or_internal: true,
+                                name: clean_name,
+                                device_id: if raw_name.is_empty() {
+                                    format!("KBD_{:?}", dev.hDevice.0)
+                                } else {
+                                    raw_name
+                                },
+                                is_internal,
                                 function_keys: fn_keys,
                                 indicators,
                             });
@@ -78,19 +117,26 @@ impl HardwareManager {
         if keyboards.is_empty() {
             keyboards.push(KeyboardDeviceInfo {
                 name: "Integrated Laptop / Standard PC Keyboard".into(),
-                is_usb_or_internal: true,
+                device_id: "ACPI\\DEFAULT_KEYBOARD".into(),
+                is_internal: true,
                 function_keys: 12,
                 indicators: 3,
             });
         }
 
         let keyboards_found = keyboards.len();
+        let primary_device = keyboards
+            .iter()
+            .find(|k| k.is_internal)
+            .map(|k| k.name.clone())
+            .unwrap_or_else(|| keyboards[0].name.clone());
 
         HardwareDetectionReport {
             numlock_on,
             keyboards_found,
             keyboards,
-            numpad_ready: keyboards_found > 0,
+            numpad_ready: true, // Always ready to receive WH_KEYBOARD_LL input
+            primary_device,
         }
     }
 }

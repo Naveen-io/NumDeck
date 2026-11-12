@@ -35,9 +35,26 @@ fn save_state(new_state: DeckState, state: State<'_, Arc<AppState>>) -> Result<(
 
     KeyboardEngine::set_deck_active(new_state.is_deck_active);
     KeyboardEngine::set_compact_mode(new_state.settings.compact_laptop_mode);
+    KeyboardEngine::set_custom_mappings(new_state.settings.custom_key_mappings.clone());
     KeyboardEngine::update_hotkey(new_state.settings.activation_hotkey);
 
     Ok(())
+}
+
+#[tauri::command]
+fn save_custom_mapping(signature: String, key: NumpadKey, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    KeyboardEngine::add_custom_mapping(signature.clone(), key);
+    let mut s = state.deck_state.lock();
+    s.settings.custom_key_mappings.insert(signature, key);
+    state.config_manager.save(&s)
+}
+
+#[tauri::command]
+fn remove_custom_mapping(signature: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    KeyboardEngine::remove_custom_mapping(&signature);
+    let mut s = state.deck_state.lock();
+    s.settings.custom_key_mappings.remove(&signature);
+    state.config_manager.save(&s)
 }
 
 #[tauri::command]
@@ -140,7 +157,8 @@ pub fn run() {
 
             let is_deck_active = initial_state.is_deck_active;
             let hotkey = initial_state.settings.activation_hotkey.clone();
-            KeyboardEngine::set_compact_mode(initial_state.settings.compact_laptop_mode);
+            let compact_mode = initial_state.settings.compact_laptop_mode;
+            let custom_mappings = initial_state.settings.custom_key_mappings.clone();
 
             let app_state = Arc::new(AppState {
                 config_manager: config_mgr,
@@ -154,7 +172,13 @@ pub fn run() {
             let state_for_keys = app_state.clone();
             let handle_for_nav = app.handle().clone();
 
-            KeyboardEngine::init(app_handle, is_deck_active, hotkey, move |key| {
+            KeyboardEngine::init(
+                app_handle,
+                is_deck_active,
+                hotkey,
+                compact_mode,
+                custom_mappings,
+                move |key| {
                 let state_guard = state_for_keys.deck_state.lock();
                 let active_profile = state_guard
                     .profiles
@@ -240,6 +264,8 @@ pub fn run() {
             set_test_mode,
             detect_hardware,
             toggle_numlock,
+            save_custom_mapping,
+            remove_custom_mapping,
             export_config,
             import_config,
             reset_config

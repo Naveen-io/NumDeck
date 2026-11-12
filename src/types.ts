@@ -133,6 +133,7 @@ export interface AppSettings {
   default_active_state: boolean;
   layout_type: 'standard_17' | 'compact_18';
   compact_laptop_mode: boolean;
+  custom_key_mappings?: Record<string, NumpadKey>;
   dark_mode: boolean;
   button_corner_radius: number;
   show_labels: boolean;
@@ -142,9 +143,16 @@ export interface AppSettings {
 
 export interface RawKeyEvent {
   vk: number;
+  vk_name: string;
   scan: number;
+  scan_byte: number;
   is_extended: boolean;
+  is_down: boolean;
+  numlock_on: boolean;
   mapped_key: NumpadKey | null;
+  key_name: string;
+  device_name?: string;
+  timestamp: string;
 }
 
 export interface DeckState {
@@ -158,7 +166,8 @@ export interface DeckState {
 
 export interface KeyboardDeviceInfo {
   name: string;
-  is_usb_or_internal: boolean;
+  device_id: string;
+  is_internal: boolean;
   function_keys: number;
   indicators: number;
 }
@@ -168,6 +177,7 @@ export interface HardwareDetectionReport {
   keyboards_found: number;
   keyboards: KeyboardDeviceInfo[];
   numpad_ready: boolean;
+  primary_device?: string;
 }
 
 export const NUMPAD_KEY_LABELS: Record<NumpadKey, { name: string; symbol: string; defaultColor: string }> = {

@@ -198,6 +198,8 @@ pub struct AppSettings {
     pub default_active_state: bool,
     pub layout_type: String, // "standard_17" or "compact_18"
     pub compact_laptop_mode: bool, // Allow top-row number keys (0-9) as Deck keys
+    #[serde(default)]
+    pub custom_key_mappings: HashMap<String, NumpadKey>,
     pub dark_mode: bool,
     pub button_corner_radius: u32,
     pub show_labels: bool,
@@ -214,6 +216,7 @@ impl Default for AppSettings {
             default_active_state: true,
             layout_type: "standard_17".to_string(),
             compact_laptop_mode: false,
+            custom_key_mappings: HashMap::new(),
             dark_mode: true,
             button_corner_radius: 12,
             show_labels: true,
@@ -221,6 +224,22 @@ impl Default for AppSettings {
             sound_feedback: true,
         }
     }
+}
+
+/// Real-time hardware keyboard event for diagnostics and manual key binding
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RawKeyEvent {
+    pub vk: u32,
+    pub vk_name: String,
+    pub scan: u32,
+    pub scan_byte: u8,
+    pub is_extended: bool,
+    pub is_down: bool,
+    pub numlock_on: bool,
+    pub mapped_key: Option<NumpadKey>,
+    pub key_name: String,
+    pub device_name: Option<String>,
+    pub timestamp: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
