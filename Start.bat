@@ -1,0 +1,3 @@
+@echo off
+echo Starting NUMPAD DECK...
+start "" "%~dp0NumpadDeck.exe"
