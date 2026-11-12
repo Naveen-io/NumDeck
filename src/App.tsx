@@ -14,6 +14,7 @@ import { ActionModal } from './components/ActionModal';
 import { ProfilesModal } from './components/ProfilesModal';
 import { SettingsModal } from './components/SettingsModal';
 import { OnboardingModal } from './components/OnboardingModal';
+import { AboutModal } from './components/AboutModal';
 
 const MOCK_DATA: AppData = {
   version: 1,
@@ -45,25 +46,68 @@ const MOCK_DATA: AppData = {
         numpad_multiply: { key_id: 'numpad_multiply', label: 'Play / Pause', icon: 'PlayPause', color: '#65C991', action: { type: 'SystemMedia', payload: { command: 'play_pause' } } },
         numpad_subtract: { key_id: 'numpad_subtract', label: 'Volume Down', icon: 'Volume1', color: '#929CAC', action: { type: 'SystemMedia', payload: { command: 'volume_down' } } },
         numpad_add: { key_id: 'numpad_add', label: 'Volume Up', icon: 'Volume2', color: '#397BFF', action: { type: 'SystemMedia', payload: { command: 'volume_up' } } },
-        numpad_7: { key_id: 'numpad_7', label: 'Browser', icon: 'Globe', color: '#397BFF', action: { type: 'OpenPath', payload: { path: 'https://www.google.com' } } },
+        numpad_7: { key_id: 'numpad_7', label: 'Chrome', icon: 'chrome', color: '#4285F4', action: { type: 'OpenPath', payload: { path: 'https://www.google.com' } } },
         numpad_8: { key_id: 'numpad_8', label: 'Calculator', icon: 'Calculator', color: '#E9B86A', action: { type: 'LaunchApp', payload: { path: 'calc.exe' } } },
-        numpad_9: { key_id: 'numpad_9', label: 'Notepad', icon: 'FileText', color: '#65C991', action: { type: 'LaunchApp', payload: { path: 'notepad.exe' } } },
+        numpad_9: { key_id: 'numpad_9', label: 'Notepad', icon: 'notepad', color: '#0078D7', action: { type: 'LaunchApp', payload: { path: 'notepad.exe' } } },
         numpad_4: { key_id: 'numpad_4', label: 'Prev Track', icon: 'SkipBack', color: '#929CAC', action: { type: 'SystemMedia', payload: { command: 'prev_track' } } },
-        numpad_5: { key_id: 'numpad_5', label: 'Explorer', icon: 'Folder', color: '#E9B86A', action: { type: 'LaunchApp', payload: { path: 'explorer.exe' } } },
+        numpad_5: { key_id: 'numpad_5', label: 'Explorer', icon: 'explorer', color: '#FFA000', action: { type: 'LaunchApp', payload: { path: 'explorer.exe' } } },
         numpad_6: { key_id: 'numpad_6', label: 'Next Track', icon: 'SkipForward', color: '#929CAC', action: { type: 'SystemMedia', payload: { command: 'next_track' } } },
         numpad_1: { key_id: 'numpad_1', label: 'Screenshot', icon: 'Camera', color: '#397BFF', action: { type: 'Hotkey', payload: { modifiers: ['win', 'shift'], key: 'S' } } },
         numpad_2: { key_id: 'numpad_2', label: 'Task Manager', icon: 'Activity', color: '#ED7777', action: { type: 'Hotkey', payload: { modifiers: ['ctrl', 'shift'], key: 'ESCAPE' } } },
         numpad_3: { key_id: 'numpad_3', label: 'Lock Screen', icon: 'Lock', color: '#929CAC', action: { type: 'Hotkey', payload: { modifiers: ['win'], key: 'L' } } },
         numpad_0: { key_id: 'numpad_0', label: 'Paste Template', icon: 'Clipboard', color: '#65C991', action: { type: 'TypeText', payload: { text: 'Support Template' } } },
         numpad_decimal: { key_id: 'numpad_decimal', label: 'Settings', icon: 'Settings', color: '#929CAC', action: { type: 'Hotkey', payload: { modifiers: ['win'], key: 'I' } } },
-        numpad_enter: { key_id: 'numpad_enter', label: 'Multi Macro', icon: 'Layers', color: '#397BFF', action: { type: 'MultiAction', payload: { steps: [] } } },
+        numpad_enter: { key_id: 'numpad_enter', label: 'Terminal', icon: 'terminal', color: '#4EC9B0', action: { type: 'LaunchApp', payload: { path: 'wt.exe' } } },
       },
       folders: [],
     },
-    { id: 'gaming', name: 'Gaming', icon: 'Gamepad2', keys: {}, folders: [] },
-    { id: 'coding', name: 'Coding', icon: 'Code', keys: {}, folders: [] },
-    { id: 'editing', name: 'Editing', icon: 'Film', keys: {}, folders: [] },
-    { id: 'streaming', name: 'Streaming', icon: 'Tv', keys: {}, folders: [] },
+    {
+      id: 'gaming',
+      name: 'Gaming',
+      icon: 'Gamepad2',
+      keys: {
+        numpad_7: { key_id: 'numpad_7', label: 'Discord', icon: 'discord', color: '#5865F2', action: { type: 'OpenPath', payload: { path: 'discord://' } } },
+        numpad_8: { key_id: 'numpad_8', label: 'Steam', icon: 'steam', color: '#1999D4', action: { type: 'OpenPath', payload: { path: 'steam://open/main' } } },
+        numpad_9: { key_id: 'numpad_9', label: 'OBS Studio', icon: 'obs', color: '#929CAC', action: { type: 'LaunchApp', payload: { path: 'obs64.exe' } } },
+        numpad_4: { key_id: 'numpad_4', label: 'Spotify', icon: 'spotify', color: '#1DB954', action: { type: 'OpenPath', payload: { path: 'spotify:' } } },
+      },
+      folders: [],
+    },
+    {
+      id: 'coding',
+      name: 'Coding',
+      icon: 'Code',
+      keys: {
+        numpad_7: { key_id: 'numpad_7', label: 'VS Code', icon: 'vscode', color: '#007ACC', action: { type: 'LaunchApp', payload: { path: 'code' } } },
+        numpad_8: { key_id: 'numpad_8', label: 'Terminal', icon: 'terminal', color: '#4EC9B0', action: { type: 'LaunchApp', payload: { path: 'wt.exe' } } },
+        numpad_9: { key_id: 'numpad_9', label: 'Visual Studio', icon: 'visualstudio', color: '#865FC5', action: { type: 'LaunchApp', payload: { path: 'devenv.exe' } } },
+        numpad_5: { key_id: 'numpad_5', label: 'Firefox Dev', icon: 'firefox', color: '#FF7139', action: { type: 'OpenPath', payload: { path: 'https://localhost:3000' } } },
+      },
+      folders: [],
+    },
+    {
+      id: 'editing',
+      name: 'Editing',
+      icon: 'Film',
+      keys: {
+        numpad_7: { key_id: 'numpad_7', label: 'Photoshop', icon: 'photoshop', color: '#31A8FF', action: { type: 'LaunchApp', payload: { path: 'Photoshop.exe' } } },
+        numpad_8: { key_id: 'numpad_8', label: 'Premiere', icon: 'premiere', color: '#EA77FF', action: { type: 'LaunchApp', payload: { path: 'Adobe Premiere Pro.exe' } } },
+        numpad_9: { key_id: 'numpad_9', label: 'Blender', icon: 'blender', color: '#EA7600', action: { type: 'LaunchApp', payload: { path: 'blender.exe' } } },
+        numpad_5: { key_id: 'numpad_5', label: 'VLC Player', icon: 'vlc', color: '#FF7800', action: { type: 'LaunchApp', payload: { path: 'vlc.exe' } } },
+      },
+      folders: [],
+    },
+    {
+      id: 'streaming',
+      name: 'Streaming',
+      icon: 'Tv',
+      keys: {
+        numpad_7: { key_id: 'numpad_7', label: 'OBS Studio', icon: 'obs', color: '#929CAC', action: { type: 'LaunchApp', payload: { path: 'obs64.exe' } } },
+        numpad_8: { key_id: 'numpad_8', label: 'Discord', icon: 'discord', color: '#5865F2', action: { type: 'OpenPath', payload: { path: 'discord://' } } },
+        numpad_9: { key_id: 'numpad_9', label: 'Spotify', icon: 'spotify', color: '#1DB954', action: { type: 'OpenPath', payload: { path: 'spotify:' } } },
+      },
+      folders: [],
+    },
   ],
 };
 
@@ -79,6 +123,7 @@ export const App: React.FC = () => {
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [isProfilesModalOpen, setIsProfilesModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<string | null>(null);
@@ -336,6 +381,7 @@ export const App: React.FC = () => {
           if (tab === 'profiles') setIsProfilesModalOpen(true);
           else if (tab === 'calibration') setIsCalibrationOpen(true);
           else if (tab === 'settings') setIsSettingsModalOpen(true);
+          else if (tab === 'about') setIsAboutModalOpen(true);
           else setCurrentTab(tab);
         }}
         isDeckMode={isDeckMode}
@@ -387,6 +433,7 @@ export const App: React.FC = () => {
               onSelectKey={(kId) => setSelectedKeyId(kId)}
               activeTriggeredKeyId={activeTriggeredKeyId}
               isDeckMode={isDeckMode}
+              profileName={currentProfile?.name || 'General'}
             />
 
             {/* Right: Key Inspector */}
@@ -441,6 +488,10 @@ export const App: React.FC = () => {
           onClose={() => setIsSettingsModalOpen(false)}
           isCalibrated={!!appData.calibration?.is_completed}
         />
+      )}
+
+      {isAboutModalOpen && (
+        <AboutModal onClose={() => setIsAboutModalOpen(false)} />
       )}
 
       {isCalibrationOpen && (

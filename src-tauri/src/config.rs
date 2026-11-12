@@ -173,9 +173,9 @@ impl ConfigManager {
             "numpad_7".to_string(),
             KeyAssignment {
                 key_id: "numpad_7".to_string(),
-                label: "Browser".to_string(),
-                icon: "Globe".to_string(),
-                color: Some("#397BFF".to_string()),
+                label: "Chrome".to_string(),
+                icon: "chrome".to_string(),
+                color: Some("#4285F4".to_string()),
                 action: Some(ActionConfig::OpenPath {
                     path: "https://www.google.com".to_string(),
                 }),
@@ -201,8 +201,8 @@ impl ConfigManager {
             KeyAssignment {
                 key_id: "numpad_9".to_string(),
                 label: "Notepad".to_string(),
-                icon: "FileText".to_string(),
-                color: Some("#65C991".to_string()),
+                icon: "notepad".to_string(),
+                color: Some("#0078D7".to_string()),
                 action: Some(ActionConfig::LaunchApp {
                     path: "notepad.exe".to_string(),
                     arguments: None,
@@ -228,8 +228,8 @@ impl ConfigManager {
             KeyAssignment {
                 key_id: "numpad_5".to_string(),
                 label: "Explorer".to_string(),
-                icon: "Folder".to_string(),
-                color: Some("#E9B86A".to_string()),
+                icon: "explorer".to_string(),
+                color: Some("#FFA000".to_string()),
                 action: Some(ActionConfig::LaunchApp {
                     path: "explorer.exe".to_string(),
                     arguments: None,
@@ -323,24 +323,12 @@ impl ConfigManager {
             "numpad_enter".to_string(),
             KeyAssignment {
                 key_id: "numpad_enter".to_string(),
-                label: "Multi Macro".to_string(),
-                icon: "Layers".to_string(),
-                color: Some("#397BFF".to_string()),
-                action: Some(ActionConfig::MultiAction {
-                    steps: vec![
-                        ActionStep {
-                            action: ActionConfig::SystemMedia {
-                                command: "play_pause".to_string(),
-                            },
-                            delay_ms: 100,
-                        },
-                        ActionStep {
-                            action: ActionConfig::TypeText {
-                                text: "Macro Activated".to_string(),
-                            },
-                            delay_ms: 50,
-                        },
-                    ],
+                label: "Terminal".to_string(),
+                icon: "terminal".to_string(),
+                color: Some("#4EC9B0".to_string()),
+                action: Some(ActionConfig::LaunchApp {
+                    path: "wt.exe".to_string(),
+                    arguments: None,
                 }),
             },
         );
@@ -361,7 +349,7 @@ impl ConfigManager {
             KeyAssignment {
                 key_id: "numpad_7".to_string(),
                 label: "Discord".to_string(),
-                icon: "MessageSquare".to_string(),
+                icon: "discord".to_string(),
                 color: Some("#5865F2".to_string()),
                 action: Some(ActionConfig::OpenPath {
                     path: "discord://".to_string(),
@@ -373,8 +361,8 @@ impl ConfigManager {
             KeyAssignment {
                 key_id: "numpad_8".to_string(),
                 label: "Steam".to_string(),
-                icon: "Gamepad2".to_string(),
-                color: Some("#397BFF".to_string()),
+                icon: "steam".to_string(),
+                color: Some("#1999D4".to_string()),
                 action: Some(ActionConfig::OpenPath {
                     path: "steam://open/main".to_string(),
                 }),
@@ -384,12 +372,24 @@ impl ConfigManager {
             "numpad_9".to_string(),
             KeyAssignment {
                 key_id: "numpad_9".to_string(),
-                label: "Game Bar".to_string(),
-                icon: "Video".to_string(),
-                color: Some("#65C991".to_string()),
-                action: Some(ActionConfig::Hotkey {
-                    modifiers: vec!["win".to_string()],
-                    key: "G".to_string(),
+                label: "OBS Studio".to_string(),
+                icon: "obs".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::LaunchApp {
+                    path: "obs64.exe".to_string(),
+                    arguments: None,
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_4".to_string(),
+            KeyAssignment {
+                key_id: "numpad_4".to_string(),
+                label: "Spotify".to_string(),
+                icon: "spotify".to_string(),
+                color: Some("#1DB954".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "spotify:".to_string(),
                 }),
             },
         );
@@ -410,8 +410,8 @@ impl ConfigManager {
             KeyAssignment {
                 key_id: "numpad_7".to_string(),
                 label: "VS Code".to_string(),
-                icon: "Code".to_string(),
-                color: Some("#397BFF".to_string()),
+                icon: "vscode".to_string(),
+                color: Some("#007ACC".to_string()),
                 action: Some(ActionConfig::LaunchApp {
                     path: "code".to_string(),
                     arguments: None,
@@ -422,11 +422,12 @@ impl ConfigManager {
             "numpad_8".to_string(),
             KeyAssignment {
                 key_id: "numpad_8".to_string(),
-                label: "Git Status".to_string(),
-                icon: "GitBranch".to_string(),
-                color: Some("#E9B86A".to_string()),
-                action: Some(ActionConfig::TypeText {
-                    text: "git status\n".to_string(),
+                label: "Terminal".to_string(),
+                icon: "terminal".to_string(),
+                color: Some("#4EC9B0".to_string()),
+                action: Some(ActionConfig::LaunchApp {
+                    path: "wt.exe".to_string(),
+                    arguments: None,
                 }),
             },
         );
@@ -434,12 +435,24 @@ impl ConfigManager {
             "numpad_9".to_string(),
             KeyAssignment {
                 key_id: "numpad_9".to_string(),
-                label: "Terminal".to_string(),
-                icon: "Terminal".to_string(),
-                color: Some("#65C991".to_string()),
+                label: "Visual Studio".to_string(),
+                icon: "visualstudio".to_string(),
+                color: Some("#865FC5".to_string()),
                 action: Some(ActionConfig::LaunchApp {
-                    path: "wt.exe".to_string(),
+                    path: "devenv.exe".to_string(),
                     arguments: None,
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_5".to_string(),
+            KeyAssignment {
+                key_id: "numpad_5".to_string(),
+                label: "Firefox Dev".to_string(),
+                icon: "firefox".to_string(),
+                color: Some("#FF7139".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "https://localhost:3000".to_string(),
                 }),
             },
         );
@@ -459,12 +472,12 @@ impl ConfigManager {
             "numpad_7".to_string(),
             KeyAssignment {
                 key_id: "numpad_7".to_string(),
-                label: "Cut Clip".to_string(),
-                icon: "Scissors".to_string(),
-                color: Some("#ED7777".to_string()),
-                action: Some(ActionConfig::Hotkey {
-                    modifiers: vec!["ctrl".to_string()],
-                    key: "B".to_string(),
+                label: "Photoshop".to_string(),
+                icon: "photoshop".to_string(),
+                color: Some("#31A8FF".to_string()),
+                action: Some(ActionConfig::LaunchApp {
+                    path: "Photoshop.exe".to_string(),
+                    arguments: None,
                 }),
             },
         );
@@ -472,12 +485,38 @@ impl ConfigManager {
             "numpad_8".to_string(),
             KeyAssignment {
                 key_id: "numpad_8".to_string(),
-                label: "Ripple Delete".to_string(),
-                icon: "Trash2".to_string(),
-                color: Some("#E9B86A".to_string()),
-                action: Some(ActionConfig::Hotkey {
-                    modifiers: vec!["shift".to_string()],
-                    key: "DELETE".to_string(),
+                label: "Premiere".to_string(),
+                icon: "premiere".to_string(),
+                color: Some("#EA77FF".to_string()),
+                action: Some(ActionConfig::LaunchApp {
+                    path: "Adobe Premiere Pro.exe".to_string(),
+                    arguments: None,
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_9".to_string(),
+            KeyAssignment {
+                key_id: "numpad_9".to_string(),
+                label: "Blender".to_string(),
+                icon: "blender".to_string(),
+                color: Some("#EA7600".to_string()),
+                action: Some(ActionConfig::LaunchApp {
+                    path: "blender.exe".to_string(),
+                    arguments: None,
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_5".to_string(),
+            KeyAssignment {
+                key_id: "numpad_5".to_string(),
+                label: "VLC Player".to_string(),
+                icon: "vlc".to_string(),
+                color: Some("#FF7800".to_string()),
+                action: Some(ActionConfig::LaunchApp {
+                    path: "vlc.exe".to_string(),
+                    arguments: None,
                 }),
             },
         );
@@ -497,12 +536,12 @@ impl ConfigManager {
             "numpad_7".to_string(),
             KeyAssignment {
                 key_id: "numpad_7".to_string(),
-                label: "Start Stream".to_string(),
-                icon: "Radio".to_string(),
-                color: Some("#65C991".to_string()),
-                action: Some(ActionConfig::Hotkey {
-                    modifiers: vec!["ctrl".to_string(), "f1".to_string()],
-                    key: "F1".to_string(),
+                label: "OBS Studio".to_string(),
+                icon: "obs".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::LaunchApp {
+                    path: "obs64.exe".to_string(),
+                    arguments: None,
                 }),
             },
         );
@@ -510,12 +549,23 @@ impl ConfigManager {
             "numpad_8".to_string(),
             KeyAssignment {
                 key_id: "numpad_8".to_string(),
-                label: "Mute Mic".to_string(),
-                icon: "MicOff".to_string(),
-                color: Some("#ED7777".to_string()),
-                action: Some(ActionConfig::Hotkey {
-                    modifiers: vec!["ctrl".to_string(), "shift".to_string()],
-                    key: "M".to_string(),
+                label: "Discord".to_string(),
+                icon: "discord".to_string(),
+                color: Some("#5865F2".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "discord://".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_9".to_string(),
+            KeyAssignment {
+                key_id: "numpad_9".to_string(),
+                label: "Spotify".to_string(),
+                icon: "spotify".to_string(),
+                color: Some("#1DB954".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "spotify:".to_string(),
                 }),
             },
         );

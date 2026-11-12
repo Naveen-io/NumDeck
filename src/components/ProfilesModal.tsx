@@ -29,6 +29,7 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
   const [profileList, setProfileList] = useState<Profile[]>(profiles);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const handleCreateProfile = () => {
     const newId = `profile_${Date.now()}`;
@@ -61,12 +62,12 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
 
   const handleDeleteProfile = (id: string) => {
     if (profileList.length <= 1) {
-      alert('Cannot delete the only remaining profile.');
       return;
     }
     const updated = profileList.filter((p) => p.id !== id);
     setProfileList(updated);
     onSaveProfiles(updated);
+    setConfirmDeleteId(null);
     if (activeProfileId === id) {
       onSelectProfile(updated[0].id);
     }
@@ -189,13 +190,31 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
                   </button>
 
                   {profileList.length > 1 && (
-                    <button
-                      onClick={() => handleDeleteProfile(p.id)}
-                      className="p-1.5 rounded-lg text-[#626D7E] hover:text-[#ED7777] hover:bg-[#191E28] transition-all"
-                      title="Delete profile"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    confirmDeleteId === p.id ? (
+                      <div className="flex items-center gap-1 bg-[#ED7777]/20 border border-[#ED7777]/40 px-2 py-0.5 rounded-lg">
+                        <span className="text-[10px] text-[#ED7777] font-bold">Delete?</span>
+                        <button
+                          onClick={() => handleDeleteProfile(p.id)}
+                          className="text-[10px] font-bold text-white bg-[#ED7777] hover:bg-[#ED7777]/80 px-1.5 py-0.5 rounded"
+                        >
+                          Yes
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="text-[10px] text-[#929CAC] hover:text-white px-1"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(p.id)}
+                        className="p-1.5 rounded-lg text-[#626D7E] hover:text-[#ED7777] hover:bg-[#191E28] transition-all cursor-pointer"
+                        title="Delete profile"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )
                   )}
                 </div>
               </div>

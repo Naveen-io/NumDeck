@@ -42,7 +42,7 @@ export const TopBar: React.FC<TopBarProps> = ({
     : undefined;
 
   return (
-    <header className="h-14 border-b border-[#252C39] bg-[#0D0F14]/80 backdrop-blur-md px-6 flex items-center justify-between shrink-0 select-none">
+    <header className="h-14 border-b border-[#252C39] bg-[#0D0F14]/90 backdrop-blur-md px-6 flex items-center justify-between shrink-0 select-none">
       {/* Profile & Navigation Breadcrumb */}
       <div className="flex items-center gap-4">
         {/* Profile Dropdown */}
@@ -67,7 +67,7 @@ export const TopBar: React.FC<TopBarProps> = ({
             <span className="text-[#626D7E]">/</span>
             <button
               onClick={onNavigateBack}
-              className="flex items-center gap-1.5 px-2 py-1 bg-[#191E28] hover:bg-[#252C39] text-[#F4F6FA] rounded-md border border-[#252C39] transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#191E28] hover:bg-[#252C39] text-[#F4F6FA] rounded-md border border-[#252C39] transition-all cursor-pointer font-semibold"
             >
               <ArrowLeft size={13} />
               <Folder size={13} className="text-[#397BFF]" />
@@ -77,12 +77,12 @@ export const TopBar: React.FC<TopBarProps> = ({
         )}
       </div>
 
-      {/* Status Badges & Deck Mode Toggle */}
+      {/* Hardware Telemetry & Mode Switch */}
       <div className="flex items-center gap-3">
-        {/* NumLock Status Indicator */}
+        {/* Physical NumLock State */}
         <div 
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border bg-[#12151C] border-[#252C39]"
-          title={numLockOn ? "Physical NumLock is ON" : "Physical NumLock is OFF"}
+          className="flex items-center gap-2 px-2.5 py-1 rounded-md text-[11px] font-mono border bg-[#12151C] border-[#252C39]"
+          title={numLockOn ? "Hardware NumLock is enabled" : "Hardware NumLock is disabled (navigation mode active)"}
         >
           <span
             className={`w-2 h-2 rounded-full ${
@@ -90,44 +90,44 @@ export const TopBar: React.FC<TopBarProps> = ({
             }`}
           />
           <span className="text-[#929CAC]">
-            NumLock: <strong className="text-[#F4F6FA]">{numLockOn ? 'ON' : 'OFF'}</strong>
+            NUMLOCK: <strong className={numLockOn ? 'text-[#65C991]' : 'text-[#E9B86A]'}>{numLockOn ? 'ON' : 'OFF'}</strong>
           </span>
         </div>
 
-        {/* Calibration Status */}
+        {/* Calibration Status Pill */}
         <button
           onClick={onOpenCalibration}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium border transition-all ${
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all cursor-pointer ${
             isCalibrated
-              ? 'bg-[#12151C] text-[#929CAC] border-[#252C39] hover:border-[#397BFF]/60'
+              ? 'bg-[#12151C] text-[#929CAC] border-[#252C39] hover:border-[#397BFF]/60 hover:text-[#F4F6FA]'
               : 'bg-[#E9B86A]/10 text-[#E9B86A] border-[#E9B86A]/40 hover:bg-[#E9B86A]/20'
           }`}
-          title="Click to calibrate or test physical numpad"
+          title="Click to recalibrate or verify physical keypad signatures"
         >
           {isCalibrated ? (
             <CheckCircle2 size={13} className="text-[#65C991]" />
           ) : (
             <AlertCircle size={13} className="text-[#E9B86A]" />
           )}
-          <span>{isCalibrated ? 'Hardware Calibrated' : 'Needs Calibration'}</span>
+          <span>{isCalibrated ? 'Hardware Calibrated' : 'Calibration Needed'}</span>
         </button>
 
         {/* Emergency Protection Indicator */}
         <div 
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-[#12151C] text-[#626D7E] border border-[#252C39]"
-          title="Emergency Fail-Safe Active: Pressing ESC 3 times restores normal keyboard instantly"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#12151C] text-[#626D7E] border border-[#252C39]"
+          title="Hardware Fail-Safe Active: Tap ESC 3 times to disarm immediately"
         >
           <ShieldCheck size={13} className="text-[#65C991]" />
-          <span>Fail-Safe Ready</span>
+          <span className="font-mono">Fail-Safe Ready</span>
         </div>
 
         {/* Deck Mode Toggle Button */}
         <button
           onClick={onToggleDeckMode}
-          className={`flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+          className={`flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
             isDeckMode
-              ? 'bg-[#14264A] text-[#397BFF] border-[#397BFF]/60 shadow-[0_0_12px_rgba(57,123,255,0.2)]'
-              : 'bg-[#12151C] text-[#929CAC] border-[#252C39] hover:text-[#F4F6FA]'
+              ? 'bg-[#14264A] text-[#397BFF] border-[#397BFF]/70 shadow-[0_0_12px_rgba(57,123,255,0.25)]'
+              : 'bg-[#12151C] text-[#929CAC] border-[#252C39] hover:text-[#F4F6FA] hover:bg-[#191E28]'
           }`}
         >
           <span>Deck Mode</span>

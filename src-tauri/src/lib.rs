@@ -1,5 +1,6 @@
 pub mod actions;
 pub mod config;
+pub mod icons;
 pub mod keyboard;
 pub mod types;
 
@@ -151,6 +152,16 @@ fn test_action(action: ActionConfig) -> Result<(), String> {
     ActionExecutor::execute(action)
 }
 
+#[command]
+fn browse_executable_file() -> Result<Option<String>, String> {
+    icons::browse_executable()
+}
+
+#[command]
+fn extract_app_icon(path: String) -> Result<String, String> {
+    icons::extract_icon_base64(&path)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config_manager = ConfigManager::new();
@@ -205,7 +216,9 @@ pub fn run() {
             save_settings,
             save_calibration,
             reset_calibration_to_default,
-            test_action
+            test_action,
+            browse_executable_file,
+            extract_app_icon
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

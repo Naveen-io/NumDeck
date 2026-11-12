@@ -8,11 +8,7 @@ import {
   Plus, 
   Cpu, 
   CheckCircle2, 
-  ExternalLink,
-  Keyboard,
-  Globe,
-  Music,
-  Terminal
+  Keyboard
 } from 'lucide-react';
 
 interface KeyInspectorProps {
@@ -36,10 +32,12 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
 }) => {
   if (!selectedKeyId) {
     return (
-      <aside className="w-80 bg-[#0D0F14] border-l border-[#252C39] p-6 flex flex-col items-center justify-center text-center select-none text-[#626D7E]">
+      <aside className="w-84 bg-[#0D0F14] border-l border-[#252C39] p-6 flex flex-col items-center justify-center text-center select-none text-[#626D7E] shrink-0">
         <Keyboard size={36} className="mb-3 opacity-30 text-[#397BFF]" />
         <h3 className="text-sm font-semibold text-[#929CAC] mb-1">No Key Selected</h3>
-        <p className="text-xs max-w-[200px]">Click any key on the numeric keypad to inspect or configure its action.</p>
+        <p className="text-xs max-w-[210px] leading-relaxed">
+          Click any key on the numeric keypad to inspect its hardware signature and configure macros.
+        </p>
       </aside>
     );
   }
@@ -50,58 +48,65 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
 
   // Format signature string
   const signatureText = signatures.length > 0
-    ? signatures.map((s) => `Scan: 0x${s.scan_code.toString(16).toUpperCase()} | Ext: ${s.is_extended ? 1 : 0} | VK: 0x${s.vk_code.toString(16).toUpperCase()}`).join('\n')
-    : 'Default Standard Signature';
+    ? signatures.map((s) => `Scan: 0x${s.scan_code.toString(16).toUpperCase()} (${s.scan_code}) | Ext: ${s.is_extended ? '1' : '0'} | VK: 0x${s.vk_code.toString(16).toUpperCase()}`).join('\n')
+    : 'Standard Hardware Default';
 
   return (
     <aside className="w-84 bg-[#0D0F14] border-l border-[#252C39] flex flex-col h-full overflow-y-auto select-none shrink-0">
       {/* Inspector Header */}
-      <div className="p-5 border-b border-[#252C39]">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-[#397BFF] font-bold">Key Inspector</span>
+      <div className="p-5 border-b border-[#252C39] bg-[#0A0C10]">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-[#397BFF] font-bold">
+            Hardware Inspector
+          </span>
           <span className="text-[10px] font-mono text-[#626D7E]">{keyDef?.id}</span>
         </div>
-        <h2 className="text-base font-bold text-[#F4F6FA] flex items-center gap-2">
-          <span>Physical Key:</span>
-          <span className="px-2 py-0.5 bg-[#191E28] border border-[#252C39] rounded text-sm font-mono text-[#397BFF]">
-            {keyDef?.defaultLabel}
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-[#F4F6FA] flex items-center gap-2">
+            <span>Physical Position:</span>
+            <span className="px-2.5 py-0.5 bg-[#191E28] border border-[#252C39] rounded-md text-xs font-mono font-bold text-[#397BFF]">
+              {keyDef?.defaultLabel}
+            </span>
+          </h2>
+          <span className="text-[10px] font-mono uppercase text-[#626D7E] bg-[#12151C] px-2 py-0.5 rounded border border-[#252C39]">
+            {keyDef?.category}
           </span>
-        </h2>
+        </div>
       </div>
 
       <div className="p-5 space-y-5 flex-1">
-        {/* Hardware Calibration Details */}
-        <div className="p-3.5 rounded-xl bg-[#12151C] border border-[#252C39]">
+        {/* Hardware Calibration Telemetry */}
+        <div className="p-3.5 rounded-xl bg-[#12151C] border border-[#252C39] shadow-inner">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-[#929CAC]">
               <Cpu size={14} className="text-[#397BFF]" />
-              <span>Hardware Signature</span>
+              <span>Low-Level Hardware Signature</span>
             </div>
             <span className="flex items-center gap-1 text-[10px] text-[#65C991] font-semibold">
               <CheckCircle2 size={12} />
-              <span>Verified</span>
+              <span>Mapped</span>
             </span>
           </div>
 
-          <pre className="text-[11px] font-mono bg-[#08090C] p-2.5 rounded-lg border border-[#252C39]/80 text-[#929CAC] overflow-x-auto whitespace-pre-wrap leading-relaxed">
+          <pre className="text-[10.5px] font-mono bg-[#08090C] p-2.5 rounded-lg border border-[#252C39]/80 text-[#929CAC] overflow-x-auto whitespace-pre-wrap leading-relaxed">
             {signatureText}
           </pre>
         </div>
 
-        {/* Action Details or Empty State */}
+        {/* Assigned Action Card or Unassigned Call-To-Action */}
         {hasAction ? (
-          <div className="p-4 rounded-xl bg-[#12151C] border border-[#252C39] space-y-4">
+          <div className="p-4 rounded-xl bg-[#12151C] border border-[#252C39] space-y-4 shadow-sm">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
                 <div
-                  className="w-10 h-10 rounded-xl bg-[#191E28] border border-[#252C39] flex items-center justify-center shadow-inner"
-                  style={assignment.color ? { borderColor: `${assignment.color}40` } : undefined}
+                  className="w-12 h-12 rounded-xl bg-[#191E28] border border-[#252C39] flex items-center justify-center shadow-inner"
+                  style={assignment.color ? { borderColor: `${assignment.color}50` } : undefined}
                 >
-                  <IconRenderer name={assignment.icon} size={20} color={assignment.color || '#397BFF'} />
+                  <IconRenderer name={assignment.icon} size={24} color={assignment.color || '#397BFF'} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#F4F6FA]">{assignment.label}</h3>
-                  <span className="text-[10px] font-mono font-semibold uppercase px-1.5 py-0.5 rounded bg-[#191E28] text-[#929CAC]">
+                  <h3 className="text-sm font-bold text-[#F4F6FA] leading-tight mb-1">{assignment.label}</h3>
+                  <span className="text-[10px] font-mono font-semibold uppercase px-2 py-0.5 rounded bg-[#191E28] text-[#929CAC] border border-[#252C39]">
                     {assignment.action?.type}
                   </span>
                 </div>
@@ -109,7 +114,7 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
             </div>
 
             {/* Action Summary Details */}
-            <div className="p-2.5 rounded-lg bg-[#08090C] border border-[#252C39]/80 text-xs font-mono text-[#929CAC] break-all">
+            <div className="p-2.5 rounded-lg bg-[#08090C] border border-[#252C39]/80 text-xs font-mono text-[#929CAC] break-all leading-relaxed">
               {formatActionSummary(assignment.action!)}
             </div>
 
@@ -117,8 +122,8 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
             <div className="flex items-center gap-2 pt-1">
               <button
                 onClick={() => onTestAction(assignment.action!)}
-                className="flex-1 py-2 px-3 rounded-lg bg-[#397BFF]/15 hover:bg-[#397BFF]/25 border border-[#397BFF]/40 text-[#397BFF] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
-                title="Execute action right now to verify it works"
+                className="flex-1 py-2 px-3 rounded-lg bg-[#397BFF]/15 hover:bg-[#397BFF]/25 border border-[#397BFF]/40 text-[#397BFF] text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                title="Execute action right now to verify functionality"
               >
                 <Play size={13} fill="currentColor" />
                 <span>Test Action</span>
@@ -126,7 +131,7 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
 
               <button
                 onClick={onEditAction}
-                className="py-2 px-3 rounded-lg bg-[#191E28] hover:bg-[#252C39] border border-[#252C39] text-[#F4F6FA] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all"
+                className="py-2 px-3 rounded-lg bg-[#191E28] hover:bg-[#252C39] border border-[#252C39] text-[#F4F6FA] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
                 <Edit3 size={13} />
                 <span>Edit</span>
@@ -134,7 +139,7 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
 
               <button
                 onClick={onRemoveAction}
-                className="py-2 px-2.5 rounded-lg bg-[#ED7777]/10 hover:bg-[#ED7777]/20 border border-[#ED7777]/30 text-[#ED7777] text-xs font-semibold flex items-center justify-center transition-all"
+                className="py-2 px-2.5 rounded-lg bg-[#ED7777]/10 hover:bg-[#ED7777]/20 border border-[#ED7777]/30 text-[#ED7777] text-xs font-semibold flex items-center justify-center transition-all cursor-pointer"
                 title="Remove action from this key"
               >
                 <Trash2 size={13} />
@@ -151,49 +156,80 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
               <span>Configure Key Action</span>
             </button>
 
-            {/* Quick Presets */}
+            {/* Quick Application Presets */}
             <div className="pt-2">
-              <span className="text-[11px] font-semibold text-[#626D7E] uppercase tracking-wider block mb-2.5">
-                Quick Presets
+              <span className="text-[11px] font-mono font-bold text-[#626D7E] uppercase tracking-wider block mb-2.5">
+                Quick Application Presets
               </span>
 
               <div className="space-y-1.5">
                 <QuickPresetItem
-                  icon={Music}
-                  label="Play / Pause Audio"
+                  icon="chrome"
+                  label="Google Chrome"
+                  color="#4285F4"
                   onClick={() =>
                     onQuickAssign({
                       key_id: selectedKeyId,
-                      label: 'Play / Pause',
-                      icon: 'PlayPause',
-                      color: '#65C991',
-                      action: { type: 'SystemMedia', payload: { command: 'play_pause' } },
-                    })
-                  }
-                />
-                <QuickPresetItem
-                  icon={Globe}
-                  label="Open Browser"
-                  onClick={() =>
-                    onQuickAssign({
-                      key_id: selectedKeyId,
-                      label: 'Browser',
-                      icon: 'Globe',
-                      color: '#397BFF',
+                      label: 'Chrome',
+                      icon: 'chrome',
+                      color: '#4285F4',
                       action: { type: 'OpenPath', payload: { path: 'https://www.google.com' } },
                     })
                   }
                 />
                 <QuickPresetItem
-                  icon={Terminal}
-                  label="Launch Terminal"
+                  icon="vscode"
+                  label="Visual Studio Code"
+                  color="#007ACC"
+                  onClick={() =>
+                    onQuickAssign({
+                      key_id: selectedKeyId,
+                      label: 'VS Code',
+                      icon: 'vscode',
+                      color: '#007ACC',
+                      action: { type: 'LaunchApp', payload: { path: 'code' } },
+                    })
+                  }
+                />
+                <QuickPresetItem
+                  icon="terminal"
+                  label="Windows Terminal"
+                  color="#4EC9B0"
                   onClick={() =>
                     onQuickAssign({
                       key_id: selectedKeyId,
                       label: 'Terminal',
-                      icon: 'Terminal',
-                      color: '#E9B86A',
+                      icon: 'terminal',
+                      color: '#4EC9B0',
                       action: { type: 'LaunchApp', payload: { path: 'wt.exe' } },
+                    })
+                  }
+                />
+                <QuickPresetItem
+                  icon="discord"
+                  label="Discord"
+                  color="#5865F2"
+                  onClick={() =>
+                    onQuickAssign({
+                      key_id: selectedKeyId,
+                      label: 'Discord',
+                      icon: 'discord',
+                      color: '#5865F2',
+                      action: { type: 'OpenPath', payload: { path: 'discord://' } },
+                    })
+                  }
+                />
+                <QuickPresetItem
+                  icon="spotify"
+                  label="Spotify"
+                  color="#1DB954"
+                  onClick={() =>
+                    onQuickAssign({
+                      key_id: selectedKeyId,
+                      label: 'Spotify',
+                      icon: 'spotify',
+                      color: '#1DB954',
+                      action: { type: 'OpenPath', payload: { path: 'spotify:' } },
                     })
                   }
                 />
@@ -207,19 +243,22 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
 };
 
 const QuickPresetItem: React.FC<{
-  icon: React.ElementType;
+  icon: string;
   label: string;
+  color: string;
   onClick: () => void;
-}> = ({ icon: Icon, label, onClick }) => (
+}> = ({ icon, label, color, onClick }) => (
   <button
     onClick={onClick}
-    className="w-full flex items-center justify-between p-2.5 rounded-lg bg-[#12151C] hover:bg-[#191E28] border border-[#252C39] text-xs font-medium text-[#929CAC] hover:text-[#F4F6FA] transition-all"
+    className="w-full flex items-center justify-between p-2.5 rounded-lg bg-[#12151C] hover:bg-[#191E28] border border-[#252C39] text-xs font-semibold text-[#929CAC] hover:text-[#F4F6FA] transition-all cursor-pointer"
   >
     <div className="flex items-center gap-2.5">
-      <Icon size={14} className="text-[#397BFF]" />
+      <div className="w-6 h-6 rounded flex items-center justify-center">
+        <IconRenderer name={icon} size={18} color={color} />
+      </div>
       <span>{label}</span>
     </div>
-    <ExternalLink size={12} className="opacity-40" />
+    <span className="text-[10px] text-[#626D7E] uppercase font-mono">1-Click</span>
   </button>
 );
 
@@ -236,11 +275,11 @@ function formatActionSummary(action: ActionConfig): string {
     case 'SystemMedia':
       return `Media: ${action.payload.command.replace('_', ' ').toUpperCase()}`;
     case 'MultiAction':
-      return `Multi-Action: ${action.payload.steps.length} sequential step(s)`;
+      return `Sequence: ${action.payload.steps.length} sequential action(s)`;
     case 'SwitchProfile':
-      return `Profile -> ${action.payload.profile_id}`;
+      return `Switch to profile: ${action.payload.profile_id}`;
     case 'NavigateFolder':
-      return `Folder -> ${action.payload.folder_id}`;
+      return `Open folder: ${action.payload.folder_id}`;
     case 'ToggleDeckMode':
       return `Toggle Deck Mode`;
     case 'BackToRootFolder':

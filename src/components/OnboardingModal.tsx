@@ -1,8 +1,7 @@
 import React from 'react';
 import { 
   Crosshair, 
-  ArrowRight,
-  Keyboard
+  ArrowRight
 } from 'lucide-react';
 
 interface OnboardingModalProps {
@@ -19,14 +18,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
       <div className="w-full max-w-lg bg-[#0D0F14] border border-[#252C39] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* Top graphic */}
         <div className="p-8 pb-4 text-center space-y-3 bg-gradient-to-b from-[#14264A]/30 to-transparent">
-          <div className="w-14 h-14 rounded-2xl bg-[#397BFF]/15 border border-[#397BFF]/40 flex items-center justify-center text-[#397BFF] mx-auto shadow-lg">
-            <Keyboard size={30} />
+          <div className="flex justify-center mb-2">
+            <img src="/logo.svg" alt="NUMPAD DECK" className="h-10 object-contain" />
           </div>
-          <h1 className="text-xl font-black text-[#F4F6FA] tracking-tight">
-            Welcome to NUMPAD DECK
-          </h1>
           <p className="text-xs text-[#929CAC] max-w-sm mx-auto leading-relaxed">
-            Transform your physical numeric keypad into an automated, hardware-accelerated macro deck.
+            Transform your physical numeric keypad into an automated, hardware-accelerated command surface.
           </p>
         </div>
 

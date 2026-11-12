@@ -6,12 +6,13 @@
 [![Tauri 2.0](https://img.shields.io/badge/Tauri-2.0-24C8D8?logo=tauri)](https://tauri.app)
 [![Rust Backend](https://img.shields.io/badge/Rust-MSVC-DEA584?logo=rust)](https://rust-lang.org)
 [![React 19 + TypeScript](https://img.shields.io/badge/React-19%20%7C%20TypeScript-61DAFB?logo=react)](https://react.dev)
+[![Strict Dark UI](https://img.shields.io/badge/UI-Precision%20Industrial%20Matte-191E28)](https://github.com)
 
 ---
 
 ## 1. Executive Summary & Architecture Reboot
 
-**NUMPAD DECK** has been completely rebuilt from zero to solve the keyboard event correlation flaws of previous implementations.
+**NUMPAD DECK** has been completely rebuilt from zero to eliminate the keyboard event correlation flaws of previous implementations.
 
 ### Why Previous Approaches Failed
 Previous attempts attempted to correlate Windows Raw Input (`WM_INPUT`) and Low-Level Keyboard Hooks (`WH_KEYBOARD_LL`) via a shared `latest_device` global variable. This failed fundamentally because:
@@ -22,7 +23,7 @@ Previous attempts attempted to correlate Windows Raw Input (`WM_INPUT`) and Low-
 
 ### The Authoritative Architecture
 NUMPAD DECK uses a **single authoritative pipeline based on `WH_KEYBOARD_LL`** with raw `KBDLLHOOKSTRUCT` hardware fields:
-- **Scan Code (`scanCode`)**: The physical OEM hardware switch index reported directly by keyboard firmware (e.g., `0x47` for physical Key 7, `0x1C` for Enter, `0x35` for `/`).
+- **Scan Code (`scanCode`)**: The physical OEM hardware switch index reported directly by keyboard firmware (e.g., `0x47` for physical Key 7, `0x1C` for Enter, `0x35` for `/`, `0x4A` for `-`, `0x4E` for `+`).
 - **Extended Flag (`LLKHF_EXTENDED = 0x01`)**: Identifies whether the key is an extended cluster key.
   - **Numpad Enter** has `LLKHF_EXTENDED = 1`; **Main Enter** has `LLKHF_EXTENDED = 0`.
   - **Numpad Navigation Keys (NumLock OFF)** have `LLKHF_EXTENDED = 0`; **Dedicated Arrow/Navigation Keys** have `LLKHF_EXTENDED = 1`.
@@ -35,13 +36,13 @@ NUMPAD DECK uses a **single authoritative pipeline based on `WH_KEYBOARD_LL`** w
 
 ## 2. Quick Start & Execution
 
-### Standalone Executable (No installation required)
+### Standalone Executable (Zero Installation Required)
 Launch directly from the repository root:
-- Double-click **`NumpadDeck.exe`** or **`Start.bat`**
+- Double-click **`NumpadDeck.exe`** (9.70 MB) or **`Start.bat`**
 - Memory footprint: **~38 MB RAM** at idle.
 
 ### Production Installer
-- **NSIS Setup**: `NumpadDeck-Setup.exe` (2.26 MB)
+- **NSIS Setup**: `NumpadDeck-Setup.exe` (2.38 MB)
 - **MSI Package**: `src-tauri/target/release/bundle/msi/Numpad Deck_1.0.0_x64_en-US.msi` (3.38 MB)
 
 ### Development & Build Commands
@@ -49,26 +50,50 @@ Launch directly from the repository root:
 # 1. Install frontend dependencies
 npm install
 
-# 2. Run automated test suite (verifies key signature isolation)
+# 2. Run automated Rust test suite (verifies key signature isolation)
 cargo test --manifest-path src-tauri/Cargo.toml
 
-# 3. Start development server with live reload
-npm run tauri dev
-
-# 4. Compile frontend
+# 3. Compile frontend bundle
 npm run build
 
-# 5. Build full production release
+# 4. Build release executable
+cargo build --release --manifest-path src-tauri/Cargo.toml
+
+# 5. Build full production installers (NSIS + MSI)
 npx @tauri-apps/cli build
 ```
 
 ---
 
-## 3. Core Features
+## 3. Brand Identity & Visual Design System
+
+NUMPAD DECK features an original industrial design language crafted specifically for precision desktop utilities:
+
+### 1. Palette & Typography
+- **Core Dark Matte Palette**: Pure void `#08090C`, structural charcoal `#0D0F14`, surface card `#12151C`, subtle border `#191E28`, interactive border `#252C39`.
+- **Focal Accent**: Calibrated cobalt `#397BFF` with subdued focus rings.
+- **High-Legibility Neutral Text**: Primary `#F4F6FA`, secondary `#929CAC`, muted `#505A69`.
+- **Zero Emojis**: 100% strict policy—no emojis anywhere in navigation, modals, buttons, or status badges.
+
+### 2. Realistic 17-Key Mechanical Workspace
+The deck workspace accurately mirrors physical mechanical numpad dimensions:
+- **Numpad Add (`+`)**: Tall vertical key spanning 2 rows.
+- **Numpad Enter**: Tall vertical key spanning 2 rows.
+- **Numpad 0**: Wide horizontal key spanning 2 columns.
+- **Tactile Keycaps**: Dual-tone chamfered keycaps, LED state dots, tactile physical labels, and subtle micro-shadows.
+
+### 3. Application & UI Icon System
+- **Lucide React**: Integrated vector icon set for all interface navigation, window controls, and actions.
+- **16 Official Monochrome Brand Icons**: Custom scalable SVGs for Google Chrome, Microsoft Edge, Mozilla Firefox, Discord, Spotify, Visual Studio Code, Visual Studio, Steam, OBS Studio, File Explorer, Notepad, Windows Terminal, VLC Media Player, Adobe Photoshop, Adobe Premiere Pro, and Blender.
+- **Native Executable Icon Extraction**: Select any `.exe` on your system to extract its high-resolution Windows application icon via native GDI and display it directly on the numpad keycap.
+
+---
+
+## 4. Core Features & Capabilities
 
 ### 1. Dual Operational Modes
-- **Normal Mode**: Keyboard works 100% normally. No keystrokes are intercepted or delayed.
-- **Deck Mode**: Suppresses calibrated physical numpad keys and executes assigned macros/actions. The main keyboard, letters, top-row numbers, main Enter, and arrows remain completely untouched and usable.
+- **Normal Mode**: Keyboard works 100% normally. No keystrokes are intercepted, delayed, or altered.
+- **Deck Mode**: Selectively suppresses calibrated physical numpad keys and executes assigned macros/actions. The main keyboard, letters, top-row numbers, main Enter, and arrows remain completely untouched and usable.
 
 ### 2. Guided Hardware Calibration Wizard
 - Walks the user through each physical key: `7, 8, 9, 4, 5, 6, 1, 2, 3, 0, ., /, *, -, +, Enter, NumLock`.
@@ -97,7 +122,7 @@ npx @tauri-apps/cli build
 
 ---
 
-## 4. Emergency Fail-Safe Recovery
+## 5. Emergency Fail-Safe Recovery
 
 If a macro or script enters an unwanted loop while in Deck Mode:
 
@@ -114,11 +139,11 @@ If a macro or script enters an unwanted loop while in Deck Mode:
 
 ---
 
-## 5. Technical Verification & Test Results
+## 6. Technical Verification & Test Results
 
 ### Automated Rust Test Suite (`cargo test`)
 All 7 unit tests passed with 0 failures:
-- `test_numpad_vs_top_row_numbers`: Proves top-row numbers (0x02–0x0B) are never matched as numpad keys.
+- `test_numpad_vs_top_row_numbers`: Proves top-row numbers (`0x02`–`0x0B`) are never matched as numpad keys.
 - `test_main_enter_vs_numpad_enter`: Proves Main Enter (`Ext: 0`) is distinguished from Numpad Enter (`Ext: 1`).
 - `test_dedicated_nav_keys_vs_numpad_nav_keys_when_numlock_off`: Proves dedicated arrow/navigation keys (`Ext: 1`) are distinguished from numpad navigation keys (`Ext: 0`).
 - `test_numlock_on_and_off_both_match_same_physical_key`: Proves keys map to the same logical action in both NumLock states.
@@ -128,7 +153,7 @@ All 7 unit tests passed with 0 failures:
 
 ---
 
-## 6. Manual Physical Hardware Verification Checklist
+## 7. Manual Physical Hardware Verification Checklist
 
 *(For user physical hardware testing when you wake up)*
 
