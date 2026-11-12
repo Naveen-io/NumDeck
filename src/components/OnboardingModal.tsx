@@ -4,10 +4,10 @@ import {
   HotkeyConfig,
   NumpadKey,
   NUMPAD_KEY_LABELS,
+  RawKeyEvent,
 } from '../types';
 import {
   LayoutGrid,
-  CheckCircle2,
   Cpu,
   Power,
   ArrowRight,
@@ -20,18 +20,26 @@ interface OnboardingModalProps {
   detectionReport: HardwareDetectionReport | null;
   onRefreshHardware?: () => void;
   lastTestedKey: NumpadKey | null;
+  lastRawKey?: RawKeyEvent | null;
   activationHotkey: HotkeyConfig;
   onToggleDeckMode: () => void;
   isDeckActive: boolean;
+  onToggleNumlock: () => void;
+  compactLaptopMode: boolean;
+  onToggleCompactMode: (enabled: boolean) => void;
 }
 
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   onComplete,
   detectionReport,
   lastTestedKey,
+  lastRawKey,
   activationHotkey,
   onToggleDeckMode,
   isDeckActive,
+  onToggleNumlock,
+  compactLaptopMode,
+  onToggleCompactMode,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [testedKeys, setTestedKeys] = useState<Set<NumpadKey>>(new Set());
@@ -64,7 +72,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
     >
       <div
         style={{
-          width: '560px',
+          width: '580px',
           maxWidth: '100%',
           backgroundColor: '#11141B',
           borderRadius: '16px',
@@ -191,22 +199,22 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
 
         {/* Step 2: Detect Keyboard */}
         {step === 2 && (
-          <div style={{ padding: '28px 32px' }}>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#FFFFFF', marginBottom: '6px' }}>
+          <div style={{ padding: '24px 28px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, color: '#FFFFFF', marginBottom: '4px' }}>
               Detect your keyboard
             </h2>
-            <p style={{ fontSize: '13px', color: '#94A3B8', marginBottom: '20px' }}>
-              We inspect your physical input hardware and verify numeric keypad responsiveness.
+            <p style={{ fontSize: '13px', color: '#94A3B8', marginBottom: '16px' }}>
+              Press keys on your laptop numpad to test responsiveness in real time.
             </p>
 
-            {/* Hardware Status Card */}
+            {/* Hardware Status Card with NumLock toggle */}
             <div
               style={{
-                padding: '14px 16px',
+                padding: '12px 16px',
                 borderRadius: '8px',
                 backgroundColor: '#161B26',
                 border: '1px solid #232C3E',
-                marginBottom: '20px',
+                marginBottom: '16px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -221,29 +229,76 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                       : 'Scanning Input Devices...'}
                   </div>
                   <div style={{ fontSize: '11px', color: '#64748B' }}>
-                    {detectionReport?.keyboards_found || 1} hardware keyboard(s) discovered • NumLock State: {detectionReport?.numlock_on ? 'ON' : 'OFF'}
+                    NumLock State: <strong style={{ color: detectionReport?.numlock_on ? '#10B981' : '#F59E0B' }}>
+                      {detectionReport?.numlock_on ? 'ON (Numbers Active)' : 'OFF (Arrow/Navigation Keys)'}
+                    </strong>
                   </div>
                 </div>
               </div>
-              <CheckCircle2 size={20} color="#10B981" />
+
+              <button
+                onClick={onToggleNumlock}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: detectionReport?.numlock_on ? '#1F2636' : '#2563EB',
+                  border: '1px solid #334155',
+                  color: '#FFFFFF',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {detectionReport?.numlock_on ? 'Toggle NumLock' : 'Turn NumLock ON'}
+              </button>
+            </div>
+
+            {/* Live Raw Key Feedback Banner */}
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                backgroundColor: lastRawKey ? 'rgba(59, 130, 246, 0.1)' : '#0D1016',
+                border: lastRawKey ? '1px solid #3B82F6' : '1px solid #1E2536',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '12px',
+              }}
+            >
+              <div>
+                <span style={{ color: '#64748B', marginRight: '6px' }}>Last Physical Key:</span>
+                {lastRawKey ? (
+                  <span style={{ color: '#F8FAFC', fontWeight: 700 }}>
+                    VK: 0x{lastRawKey.vk.toString(16).toUpperCase()} • Scan: 0x{lastRawKey.scan.toString(16).toUpperCase()}
+                    {lastRawKey.mapped_key ? (
+                      <span style={{ color: '#34D399', marginLeft: '8px' }}>
+                        (Mapped to {NUMPAD_KEY_LABELS[lastRawKey.mapped_key]?.name}) ✓
+                      </span>
+                    ) : (
+                      <span style={{ color: '#F59E0B', marginLeft: '8px' }}>
+                        (Not a physical numpad key)
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span style={{ color: '#64748B' }}>Press any key on your keyboard right now...</span>
+                )}
+              </div>
             </div>
 
             {/* Interactive Key Test Box */}
             <div
               style={{
-                padding: '16px',
+                padding: '14px',
                 borderRadius: '10px',
                 backgroundColor: '#0D1016',
                 border: '1px solid #1E2536',
-                marginBottom: '24px',
+                marginBottom: '16px',
                 textAlign: 'center',
               }}
             >
-              <div style={{ fontSize: '12px', fontWeight: 600, color: '#94A3B8', marginBottom: '12px' }}>
-                Press any physical numpad key right now to test:
-              </div>
-
-              {/* Mini Interactive Numpad Map */}
               <div
                 style={{
                   display: 'inline-grid',
@@ -308,11 +363,41 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 })}
               </div>
 
-              <div style={{ fontSize: '11px', color: testedKeys.size > 0 ? '#34D399' : '#64748B' }}>
+              <div style={{ fontSize: '11px', color: testedKeys.size > 0 ? '#34D399' : '#94A3B8' }}>
                 {testedKeys.size > 0
-                  ? `✓ Tested ${testedKeys.size} numpad key(s). Hardware response verified!`
-                  : 'Awaiting your key press...'}
+                  ? `✓ Detected ${testedKeys.size} numpad key(s)! Interception verified.`
+                  : 'Press keys on the physical keypad to verify.'}
               </div>
+            </div>
+
+            {/* Compact Laptop Mode Option for laptops without separate numpad */}
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                backgroundColor: compactLaptopMode ? 'rgba(59, 130, 246, 0.15)' : '#161B26',
+                border: compactLaptopMode ? '1px solid #3B82F6' : '1px solid #232C3E',
+                marginBottom: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}
+            >
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#FFFFFF' }}>
+                  Compact Laptop Mode (Use Top-Row Numbers 0-9)
+                </div>
+                <div style={{ fontSize: '10px', color: '#64748B' }}>
+                  Enable this if your laptop lacks a separate 17-key numpad island.
+                </div>
+              </div>
+
+              <input
+                type="checkbox"
+                checked={compactLaptopMode}
+                onChange={(e) => onToggleCompactMode(e.target.checked)}
+                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+              />
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

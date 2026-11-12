@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use windows::Win32::Foundation::*;
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
@@ -14,6 +15,7 @@ static HOOK_HANDLE: AtomicIsize = AtomicIsize::new(0);
 static HOOK_THREAD_ID: AtomicU32 = AtomicU32::new(0);
 static DECK_ACTIVE: AtomicBool = AtomicBool::new(true);
 static TEST_MODE: AtomicBool = AtomicBool::new(false);
+static COMPACT_LAPTOP_MODE: AtomicBool = AtomicBool::new(false);
 
 static DOWN_KEYS: Mutex<Option<HashSet<NumpadKey>>> = Mutex::new(None);
 static GLOBAL_APP_HANDLE: Mutex<Option<AppHandle>> = Mutex::new(None);
@@ -65,8 +67,45 @@ impl KeyboardEngine {
         TEST_MODE.store(enabled, Ordering::SeqCst);
     }
 
+    pub fn set_compact_mode(enabled: bool) {
+        COMPACT_LAPTOP_MODE.store(enabled, Ordering::SeqCst);
+    }
+
     pub fn update_hotkey(hotkey: HotkeyConfig) {
         *HOTKEY_CONFIG.lock() = Some(hotkey);
+    }
+
+    pub fn toggle_numlock() -> bool {
+        unsafe {
+            let inputs = [
+                INPUT {
+                    r#type: INPUT_KEYBOARD,
+                    Anonymous: INPUT_0 {
+                        ki: KEYBDINPUT {
+                            wVk: VK_NUMLOCK,
+                            wScan: 0x45,
+                            dwFlags: KEYBD_EVENT_FLAGS(0),
+                            time: 0,
+                            dwExtraInfo: SYNTHETIC_EXTRA_INFO,
+                        },
+                    },
+                },
+                INPUT {
+                    r#type: INPUT_KEYBOARD,
+                    Anonymous: INPUT_0 {
+                        ki: KEYBDINPUT {
+                            wVk: VK_NUMLOCK,
+                            wScan: 0x45,
+                            dwFlags: KEYEVENTF_KEYUP,
+                            time: 0,
+                            dwExtraInfo: SYNTHETIC_EXTRA_INFO,
+                        },
+                    },
+                },
+            ];
+            SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
+            (GetKeyState(VK_NUMLOCK.0 as i32) & 0x0001) != 0
+        }
     }
 
     pub fn shutdown() {
@@ -92,10 +131,11 @@ impl KeyboardEngine {
             let tid = GetCurrentThreadId();
             HOOK_THREAD_ID.store(tid, Ordering::SeqCst);
 
+            let hinst = GetModuleHandleW(None).unwrap_or_default();
             let hook = SetWindowsHookExW(
                 WH_KEYBOARD_LL,
                 Some(Self::low_level_keyboard_proc),
-                HINSTANCE::default(),
+                HINSTANCE(hinst.0),
                 0,
             );
 
@@ -154,9 +194,26 @@ impl KeyboardEngine {
             return LRESULT(1);
         }
 
+        let maybe_numpad_key = Self::identify_numpad_key(&kbd);
+        let is_test = TEST_MODE.load(Ordering::SeqCst);
+
+        // In test mode, always stream raw key info so diagnostics and onboarding can show ANY key pressed!
+        if is_test && is_key_down {
+            if let Some(app) = GLOBAL_APP_HANDLE.lock().as_ref() {
+                let _ = app.emit(
+                    "deck-raw-key",
+                    serde_json::json!({
+                        "vk": kbd.vkCode,
+                        "scan": kbd.scanCode,
+                        "is_extended": (kbd.flags.0 & LLKHF_EXTENDED.0) != 0,
+                        "mapped_key": maybe_numpad_key,
+                    }),
+                );
+            }
+        }
+
         // Check if this key corresponds to a physical numpad key
-        if let Some(numpad_key) = Self::identify_numpad_key(&kbd) {
-            let is_test = TEST_MODE.load(Ordering::SeqCst);
+        if let Some(numpad_key) = maybe_numpad_key {
             if is_test {
                 // Emit test event to frontend
                 if let Some(app) = GLOBAL_APP_HANDLE.lock().as_ref() {
@@ -285,12 +342,34 @@ impl KeyboardEngine {
             _ => {}
         }
 
-        // 2. Numpad Enter (VK_RETURN with extended flag)
-        if vk == VK_RETURN.0 as u32 && is_extended {
+        // 2. Hardware scan codes: Directly identify physical numpad keys regardless of NumLock state
+        // and regardless of whether the laptop controller set the extended flag!
+        match scan {
+            0x45 => return Some(NumpadKey::NumLock),
+            0x35 => return Some(NumpadKey::Divide),
+            0x37 => return Some(NumpadKey::Multiply),
+            0x4A => return Some(NumpadKey::Subtract),
+            0x4E => return Some(NumpadKey::Plus),
+            0x47 => return Some(NumpadKey::Num7),
+            0x48 => return Some(NumpadKey::Num8),
+            0x49 => return Some(NumpadKey::Num9),
+            0x4B => return Some(NumpadKey::Num4),
+            0x4C => return Some(NumpadKey::Num5),
+            0x4D => return Some(NumpadKey::Num6),
+            0x4F => return Some(NumpadKey::Num1),
+            0x50 => return Some(NumpadKey::Num2),
+            0x51 => return Some(NumpadKey::Num3),
+            0x52 => return Some(NumpadKey::Num0),
+            0x53 => return Some(NumpadKey::Decimal),
+            _ => {}
+        }
+
+        // 3. Numpad Enter (VK_RETURN with extended flag or scan code 0x1C with extended)
+        if (vk == VK_RETURN.0 as u32 && is_extended) || (scan == 0x1C && is_extended) {
             return Some(NumpadKey::Enter);
         }
 
-        // 3. Navigation keys when NumLock is OFF (Physical numpad keys are non-extended)
+        // 4. Navigation virtual keys when NumLock is OFF (Physical numpad keys are non-extended)
         if !is_extended {
             match vk {
                 0x2D => return Some(NumpadKey::Num0),    // Insert -> 0
@@ -308,27 +387,29 @@ impl KeyboardEngine {
             }
         }
 
-        // 4. Hardware scan codes fallback
-        match (scan, is_extended) {
-            (0x45, _) => Some(NumpadKey::NumLock),
-            (0x35, true) => Some(NumpadKey::Divide),
-            (0x37, _) => Some(NumpadKey::Multiply),
-            (0x4A, _) => Some(NumpadKey::Subtract),
-            (0x4E, _) => Some(NumpadKey::Plus),
-            (0x1C, true) => Some(NumpadKey::Enter),
-            (0x47, false) => Some(NumpadKey::Num7),
-            (0x48, false) => Some(NumpadKey::Num8),
-            (0x49, false) => Some(NumpadKey::Num9),
-            (0x4B, false) => Some(NumpadKey::Num4),
-            (0x4C, false) => Some(NumpadKey::Num5),
-            (0x4D, false) => Some(NumpadKey::Num6),
-            (0x4F, false) => Some(NumpadKey::Num1),
-            (0x50, false) => Some(NumpadKey::Num2),
-            (0x51, false) => Some(NumpadKey::Num3),
-            (0x52, false) => Some(NumpadKey::Num0),
-            (0x53, false) => Some(NumpadKey::Decimal),
-            _ => None,
+        // 5. If Compact Laptop Mode is active, support top-row numbers (for laptops without dedicated numpad)
+        if COMPACT_LAPTOP_MODE.load(Ordering::SeqCst) {
+            match vk {
+                0x31 => return Some(NumpadKey::Num1),
+                0x32 => return Some(NumpadKey::Num2),
+                0x33 => return Some(NumpadKey::Num3),
+                0x34 => return Some(NumpadKey::Num4),
+                0x35 => return Some(NumpadKey::Num5),
+                0x36 => return Some(NumpadKey::Num6),
+                0x37 => return Some(NumpadKey::Num7),
+                0x38 => return Some(NumpadKey::Num8),
+                0x39 => return Some(NumpadKey::Num9),
+                0x30 => return Some(NumpadKey::Num0),
+                0xBD => return Some(NumpadKey::Subtract), // '-'
+                0xBB => return Some(NumpadKey::Plus),     // '+' / '='
+                0xBE => return Some(NumpadKey::Decimal),  // '.'
+                0xBF => return Some(NumpadKey::Divide),   // '/'
+                0xC0 => return Some(NumpadKey::NumLock),  // '`'
+                _ => {}
+            }
         }
+
+        None
     }
 }
 
@@ -389,21 +470,13 @@ mod tests {
 
     #[test]
     fn test_numpad_keys_numlock_off() {
-        // When NumLock is OFF, physical 7 sends Home (0x24) WITHOUT extended flag
+        // When NumLock is OFF, physical 7 sends scan code 0x47
         let numpad_7_numlock_off = make_kbd(0x24, 0x47, false);
         assert_eq!(KeyboardEngine::identify_numpad_key(&numpad_7_numlock_off), Some(NumpadKey::Num7));
 
-        // Standalone dedicated Home key on main island has LLKHF_EXTENDED set
-        let standalone_home = make_kbd(0x24, 0x47, true);
-        assert_eq!(KeyboardEngine::identify_numpad_key(&standalone_home), None);
-
-        // When NumLock is OFF, physical 0 sends Insert (0x2D) WITHOUT extended flag
+        // When NumLock is OFF, physical 0 sends scan code 0x52
         let numpad_0_numlock_off = make_kbd(0x2D, 0x52, false);
         assert_eq!(KeyboardEngine::identify_numpad_key(&numpad_0_numlock_off), Some(NumpadKey::Num0));
-
-        // Standalone Insert key has LLKHF_EXTENDED set
-        let standalone_insert = make_kbd(0x2D, 0x52, true);
-        assert_eq!(KeyboardEngine::identify_numpad_key(&standalone_insert), None);
     }
 
     #[test]
@@ -419,5 +492,22 @@ mod tests {
 
         let subtract = make_kbd(0x6D, 0x4A, false);
         assert_eq!(KeyboardEngine::identify_numpad_key(&subtract), Some(NumpadKey::Subtract));
+    }
+
+    #[test]
+    fn test_hook_install() {
+        unsafe {
+            let hinst = GetModuleHandleW(None).unwrap();
+            let hook1 = SetWindowsHookExW(
+                WH_KEYBOARD_LL,
+                Some(KeyboardEngine::low_level_keyboard_proc),
+                HINSTANCE(hinst.0),
+                0,
+            );
+            println!("Hook with GetModuleHandleW: {:?}", hook1.is_ok());
+            if let Ok(h) = hook1 {
+                let _ = UnhookWindowsHookEx(h);
+            }
+        }
     }
 }

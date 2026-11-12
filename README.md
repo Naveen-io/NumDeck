@@ -26,13 +26,33 @@
 
 ---
 
-## 📦 Download & Installers
+## 📦 Download & Running the App
 
-Built production artifacts ready for Windows 10/11:
+### Standalone Executable (Fastest)
+From PowerShell:
+```powershell
+cd D:\Apps\Numdeck
+.\NumpadDeck.exe
+```
 
-- **NSIS Installer**: [`src-tauri/target/release/bundle/nsis/Numpad Deck_1.0.0_x64-setup.exe`](file:///D:/Apps/Numdeck/src-tauri/target/release/bundle/nsis/Numpad%20Deck_1.0.0_x64-setup.exe) (1.79 MB)
-- **MSI Installer**: [`src-tauri/target/release/bundle/msi/Numpad Deck_1.0.0_x64_en-US.msi`](file:///D:/Apps/Numdeck/src-tauri/target/release/bundle/msi/Numpad%20Deck_1.0.0_x64_en-US.msi) (2.52 MB)
-- **Direct Standalone Binary**: [`src-tauri/target/release/numpad-deck.exe`](file:///D:/Apps/Numdeck/src-tauri/target/release/numpad-deck.exe)
+### Windows Setup Installer
+```powershell
+cd D:\Apps\Numdeck
+& ".\NumpadDeck-Setup.exe"
+```
+
+---
+
+## 🔧 Troubleshooting: Keys Not Detected on Laptop?
+
+If pressing your numpad keys does not light up the deck or trigger actions:
+
+1. **NumLock State**: On many laptops (especially Acer, Lenovo, ASUS), physical numpad keys send navigation codes (`Home`, `End`, `PageUp`) when NumLock is OFF.
+   - Simply press the physical **NumLock** key, or click **"Turn NumLock ON"** in the Diagnostics & Tester tab.
+2. **Compact Laptop Mode (No 17-Key Island)**: If your laptop has no separate physical numpad island and uses the top number row:
+   - Open **Settings** (or Setup Wizard) and enable **"Compact Laptop Mode (Top-Row Numbers 0-9)"**. Deck actions will then trigger directly from your top number keys (`0`–`9`, `-`, `=`) whenever Deck Mode is toggled ON.
+3. **Check the Live Hardware Tester**:
+   - Go to the **Tester** tab in the sidebar. Any key pressed will display its live Windows Virtual Key (VK) and Hardware Scan Code in real time.
 
 ---
 

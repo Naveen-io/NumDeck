@@ -94,3 +94,14 @@ impl HardwareManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_detect_hw() {
+        let report = HardwareManager::detect_hardware();
+        println!("Hardware Detection Report: {:#?}", report);
+    }
+}

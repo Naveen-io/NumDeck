@@ -3,11 +3,13 @@ import {
   HardwareDetectionReport,
   NumpadKey,
   NUMPAD_KEY_LABELS,
+  RawKeyEvent,
 } from '../types';
 import {
   Cpu,
   RefreshCw,
   Terminal,
+  Activity,
 } from 'lucide-react';
 
 interface KeyTestEvent {
@@ -26,6 +28,8 @@ interface KeyboardTesterProps {
   lastTestedKey: NumpadKey | null;
   isDeckActive: boolean;
   onToggleDeckMode: () => void;
+  lastRawKey?: RawKeyEvent | null;
+  onToggleNumlock?: () => void;
 }
 
 export const KeyboardTester: React.FC<KeyboardTesterProps> = ({
@@ -34,6 +38,8 @@ export const KeyboardTester: React.FC<KeyboardTesterProps> = ({
   recentTestEvents,
   lastTestedKey,
   isDeckActive,
+  lastRawKey,
+  onToggleNumlock,
 }) => {
 
   return (
@@ -115,6 +121,25 @@ export const KeyboardTester: React.FC<KeyboardTesterProps> = ({
             <div style={{ fontSize: '11px', color: '#64748B', marginTop: '4px' }}>
               Numpad Deck captures both states identically.
             </div>
+            {onToggleNumlock && (
+              <button
+                onClick={onToggleNumlock}
+                style={{
+                  marginTop: '10px',
+                  padding: '4px 10px',
+                  borderRadius: '5px',
+                  backgroundColor: '#1C2230',
+                  border: '1px solid #2E384D',
+                  color: '#94A3B8',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                Toggle NumLock State
+              </button>
+            )}
           </div>
 
           <div
@@ -184,6 +209,39 @@ export const KeyboardTester: React.FC<KeyboardTesterProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Live Raw Hardware Event Banner */}
+        {lastRawKey && (
+          <div
+            style={{
+              backgroundColor: '#161E2E',
+              border: '1px solid #2563EB',
+              borderRadius: '8px',
+              padding: '10px 16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Activity size={16} color="#60A5FA" />
+              <span style={{ color: '#93C5FD', fontWeight: 600 }}>Live Hardware Signal Intercepted:</span>
+              <span style={{ color: '#FFFFFF', fontFamily: 'Consolas, monospace', fontWeight: 700 }}>
+                VK=0x{lastRawKey.vk.toString(16).toUpperCase()} | Scan=0x{lastRawKey.scan.toString(16).toUpperCase()}
+              </span>
+            </div>
+            {lastRawKey.mapped_key ? (
+              <span style={{ color: '#34D399', fontWeight: 700 }}>
+                ✓ Matched: {NUMPAD_KEY_LABELS[lastRawKey.mapped_key]?.name || lastRawKey.mapped_key}
+              </span>
+            ) : (
+              <span style={{ color: '#F59E0B', fontWeight: 600 }}>
+                (Unmapped Key — Enable Compact Laptop Mode for top row 0-9)
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Live Visual Numpad Board & Event Stream in 2 Columns */}
         <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: '20px' }}>

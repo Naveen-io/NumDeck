@@ -34,9 +34,15 @@ fn save_state(new_state: DeckState, state: State<'_, Arc<AppState>>) -> Result<(
     state.config_manager.save(&new_state)?;
 
     KeyboardEngine::set_deck_active(new_state.is_deck_active);
+    KeyboardEngine::set_compact_mode(new_state.settings.compact_laptop_mode);
     KeyboardEngine::update_hotkey(new_state.settings.activation_hotkey);
 
     Ok(())
+}
+
+#[tauri::command]
+fn toggle_numlock() -> bool {
+    KeyboardEngine::toggle_numlock()
 }
 
 #[tauri::command]
@@ -134,6 +140,7 @@ pub fn run() {
 
             let is_deck_active = initial_state.is_deck_active;
             let hotkey = initial_state.settings.activation_hotkey.clone();
+            KeyboardEngine::set_compact_mode(initial_state.settings.compact_laptop_mode);
 
             let app_state = Arc::new(AppState {
                 config_manager: config_mgr,
@@ -232,6 +239,7 @@ pub fn run() {
             execute_button_action,
             set_test_mode,
             detect_hardware,
+            toggle_numlock,
             export_config,
             import_config,
             reset_config

@@ -10,6 +10,7 @@ import {
   DeckFolder,
   HardwareDetectionReport,
   HotkeyConfig,
+  RawKeyEvent,
 } from './types';
 import { Sidebar } from './components/Sidebar';
 import { NumpadGrid } from './components/NumpadGrid';
@@ -30,6 +31,7 @@ export const App: React.FC = () => {
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [recentTestEvents, setRecentTestEvents] = useState<any[]>([]);
   const [lastTestedKey, setLastTestedKey] = useState<NumpadKey | null>(null);
+  const [lastRawKey, setLastRawKey] = useState<RawKeyEvent | null>(null);
 
   const stateRef = useRef(deckState);
   stateRef.current = deckState;
@@ -96,6 +98,10 @@ export const App: React.FC = () => {
             ...prev.slice(0, 49),
           ]);
         }
+      }),
+
+      listen<RawKeyEvent>('deck-raw-key', (event) => {
+        setLastRawKey(event.payload);
       }),
 
       listen<string | null>('active-folder-changed', (event) => {
@@ -175,6 +181,28 @@ export const App: React.FC = () => {
     } catch (err) {
       console.error('Failed to toggle deck mode:', err);
     }
+  };
+
+  const handleToggleNumlock = async () => {
+    try {
+      const isNumlockOn: boolean = await invoke('toggle_numlock');
+      setDetectionReport((prev) => (prev ? { ...prev, numlock_on: isNumlockOn } : null));
+      playKeyClickSound();
+    } catch (err) {
+      console.error('Failed to toggle numlock:', err);
+    }
+  };
+
+  const handleToggleCompactMode = (enabled: boolean) => {
+    if (!deckState) return;
+    const updated: DeckState = {
+      ...deckState,
+      settings: {
+        ...deckState.settings,
+        compact_laptop_mode: enabled,
+      },
+    };
+    persistState(updated);
   };
 
   const handleSelectProfile = (profileId: string) => {
@@ -492,6 +520,8 @@ export const App: React.FC = () => {
           lastTestedKey={lastTestedKey}
           isDeckActive={deckState.is_deck_active}
           onToggleDeckMode={handleToggleDeckMode}
+          lastRawKey={lastRawKey}
+          onToggleNumlock={handleToggleNumlock}
         />
       )}
 
@@ -505,6 +535,8 @@ export const App: React.FC = () => {
           onImportConfig={handleImportConfig}
           onResetDefaults={handleResetDefaults}
           onLaunchOnboarding={() => setShowOnboarding(true)}
+          onToggleNumlock={handleToggleNumlock}
+          isNumlockOn={detectionReport?.numlock_on ?? true}
         />
       )}
 
@@ -515,9 +547,13 @@ export const App: React.FC = () => {
           detectionReport={detectionReport}
           onRefreshHardware={handleRefreshHardware}
           lastTestedKey={lastTestedKey}
+          lastRawKey={lastRawKey}
           activationHotkey={deckState.settings.activation_hotkey}
           onToggleDeckMode={handleToggleDeckMode}
           isDeckActive={deckState.is_deck_active}
+          onToggleNumlock={handleToggleNumlock}
+          compactLaptopMode={deckState.settings.compact_laptop_mode}
+          onToggleCompactMode={handleToggleCompactMode}
         />
       )}
     </div>

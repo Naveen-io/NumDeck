@@ -197,6 +197,7 @@ pub struct AppSettings {
     pub minimize_to_tray: bool,
     pub default_active_state: bool,
     pub layout_type: String, // "standard_17" or "compact_18"
+    pub compact_laptop_mode: bool, // Allow top-row number keys (0-9) as Deck keys
     pub dark_mode: bool,
     pub button_corner_radius: u32,
     pub show_labels: bool,
@@ -212,6 +213,7 @@ impl Default for AppSettings {
             minimize_to_tray: true,
             default_active_state: true,
             layout_type: "standard_17".to_string(),
+            compact_laptop_mode: false,
             dark_mode: true,
             button_corner_radius: 12,
             show_labels: true,
@@ -229,4 +231,16 @@ pub struct DeckState {
     pub is_deck_active: bool,
     pub profiles: Vec<Profile>,
     pub settings: AppSettings,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_serde_keys() {
+        let s = serde_json::to_string(&NumpadKey::Num7).unwrap();
+        println!("Num7 serialized: {}", s);
+        assert_eq!(s, "\"num7\"");
+    }
 }

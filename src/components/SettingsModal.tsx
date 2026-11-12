@@ -14,6 +14,8 @@ interface SettingsModalProps {
   onImportConfig: () => void;
   onResetDefaults: () => void;
   onLaunchOnboarding: () => void;
+  onToggleNumlock?: () => void;
+  isNumlockOn?: boolean;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -23,6 +25,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onImportConfig,
   onResetDefaults,
   onLaunchOnboarding,
+  onToggleNumlock,
+  isNumlockOn = true,
 }) => {
   const settings = deckState.settings;
 
@@ -283,6 +287,61 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               style={{ width: '18px', height: '18px', cursor: 'pointer' }}
             />
           </div>
+
+          {/* Compact Laptop Mode */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1A202E', paddingTop: '14px' }}>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>Compact Laptop Mode (Top-Row Numbers 0-9)</span>
+                {settings.compact_laptop_mode && (
+                  <span style={{ fontSize: '10px', backgroundColor: '#059669', color: '#FFFFFF', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                    ENABLED
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                For laptops without a physical 17-key numpad island (e.g., Acer Swift, Dell XPS, ultrabooks). Intercepts top number row (0-9, -, =) when Deck Mode is ON.
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.compact_laptop_mode ?? false}
+              onChange={(e) => handleUpdate({ compact_laptop_mode: e.target.checked })}
+              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+            />
+          </div>
+
+          {/* NumLock Hardware State & Control */}
+          {onToggleNumlock && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #1A202E', paddingTop: '14px' }}>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#FFFFFF' }}>
+                  Hardware NumLock State:{' '}
+                  <span style={{ color: isNumlockOn ? '#10B981' : '#F59E0B' }}>
+                    {isNumlockOn ? 'ON (Numeric)' : 'OFF (Navigational)'}
+                  </span>
+                </div>
+                <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>
+                  On some laptop keyboards, NumLock must be ON for the physical keys to send standard numpad scan codes.
+                </div>
+              </div>
+              <button
+                onClick={onToggleNumlock}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  backgroundColor: '#1E2536',
+                  border: '1px solid #2E384D',
+                  color: '#F8FAFC',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {isNumlockOn ? 'Turn NumLock OFF' : 'Turn NumLock ON'}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Section 4: Advanced & Reset */}

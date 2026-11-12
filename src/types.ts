@@ -132,11 +132,19 @@ export interface AppSettings {
   minimize_to_tray: boolean;
   default_active_state: boolean;
   layout_type: 'standard_17' | 'compact_18';
+  compact_laptop_mode: boolean;
   dark_mode: boolean;
   button_corner_radius: number;
   show_labels: boolean;
   onboarding_completed: boolean;
   sound_feedback: boolean;
+}
+
+export interface RawKeyEvent {
+  vk: number;
+  scan: number;
+  is_extended: boolean;
+  mapped_key: NumpadKey | null;
 }
 
 export interface DeckState {
