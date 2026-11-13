@@ -44,6 +44,11 @@ fn set_engine_mode(
         let _ = app.emit("deck-mode-changed", is_deck);
         log::info!("Engine mode set to: {:?}", mode);
     }
+    {
+        let mut data = context.data.write();
+        data.settings.deck_mode = mode == EngineMode::Deck;
+        let _ = context.config_manager.save(&data);
+    }
     Ok(())
 }
 
@@ -200,6 +205,7 @@ pub fn run() {
                 app_handle,
                 app_data.calibration.clone(),
                 active_profile,
+                app_data.settings.deck_mode,
             );
 
             *app_context.engine.write() = Some(engine);

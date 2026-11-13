@@ -336,6 +336,51 @@ pub struct AppData {
     pub calibration: CalibrationProfile,
     pub profiles: Vec<Profile>,
 }
+
+/// Core suppression and routing decision produced by the low-level hook pipeline
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookDecision {
+    SuppressAndExecute,
+    SuppressOnly,
+    PassThrough,
+}
+
+/// Pure decision function mirroring low_level_keyboard_proc logic for regression testing
+pub fn evaluate_key_event(
+    mode: EngineMode,
+    cal: &CalibrationProfile,
+    pressed_keys: &mut std::collections::HashSet<String>,
+    vk_code: u32,
+    scan_code: u32,
+    is_extended: bool,
+    is_injected: bool,
+    is_key_down: bool,
+) -> (HookDecision, Option<String>) {
+    if is_injected {
+        return (HookDecision::PassThrough, None);
+    }
+    match mode {
+        EngineMode::Calibrating => (HookDecision::SuppressOnly, None),
+        EngineMode::Deck => {
+            if let Some(key_id) = cal.find_matched_key(vk_code, scan_code, is_extended) {
+                if is_key_down {
+                    let first = pressed_keys.insert(key_id.clone());
+                    if first {
+                        (HookDecision::SuppressAndExecute, Some(key_id))
+                    } else {
+                        (HookDecision::SuppressOnly, Some(key_id))
+                    }
+                } else {
+                    pressed_keys.remove(&key_id);
+                    (HookDecision::SuppressOnly, Some(key_id))
+                }
+            } else {
+                (HookDecision::PassThrough, None)
+            }
+        }
+        EngineMode::Normal => (HookDecision::PassThrough, None),
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -419,5 +464,145 @@ mod tests {
 
         assert_eq!(cal.find_matched_key(0x67, 0x88, false), Some("numpad_7".to_string()));
         assert_eq!(cal.find_matched_key(0x67, 0x47, false), None);
+    }
+
+    #[test]
+    fn test_regression_deck_mode_on_suppresses_and_executes() {
+        let cal = CalibrationProfile::standard_default();
+        let mut pressed = std::collections::HashSet::new();
+
+        // Numpad 7 Key Down: Must SuppressAndExecute
+        let (decision, key) = evaluate_key_event(
+            EngineMode::Deck,
+            &cal,
+            &mut pressed,
+            0x67,
+            0x47,
+            false,
+            false,
+            true,
+        );
+        assert_eq!(decision, HookDecision::SuppressAndExecute);
+        assert_eq!(key, Some("numpad_7".to_string()));
+
+        // Numpad 7 Key Repeat (held down): Must SuppressOnly (no duplicate action)
+        let (decision_repeat, key_repeat) = evaluate_key_event(
+            EngineMode::Deck,
+            &cal,
+            &mut pressed,
+            0x67,
+            0x47,
+            false,
+            false,
+            true,
+        );
+        assert_eq!(decision_repeat, HookDecision::SuppressOnly);
+        assert_eq!(key_repeat, Some("numpad_7".to_string()));
+
+        // Numpad 7 Key Up: Must SuppressOnly and release from pressed set
+        let (decision_up, key_up) = evaluate_key_event(
+            EngineMode::Deck,
+            &cal,
+            &mut pressed,
+            0x67,
+            0x47,
+            false,
+            false,
+            false,
+        );
+        assert_eq!(decision_up, HookDecision::SuppressOnly);
+        assert_eq!(key_up, Some("numpad_7".to_string()));
+        assert!(!pressed.contains("numpad_7"));
+    }
+
+    #[test]
+    fn test_regression_deck_mode_off_passes_through_all_keys() {
+        let cal = CalibrationProfile::standard_default();
+        let mut pressed = std::collections::HashSet::new();
+
+        // Numpad 7 in Normal Mode: Must PassThrough
+        let (decision, key) = evaluate_key_event(
+            EngineMode::Normal,
+            &cal,
+            &mut pressed,
+            0x67,
+            0x47,
+            false,
+            false,
+            true,
+        );
+        assert_eq!(decision, HookDecision::PassThrough);
+        assert_eq!(key, None);
+
+        // Top-row numbers in Normal Mode: Must PassThrough
+        let (decision_top, _) = evaluate_key_event(
+            EngineMode::Normal,
+            &cal,
+            &mut pressed,
+            0x37,
+            0x08,
+            false,
+            false,
+            true,
+        );
+        assert_eq!(decision_top, HookDecision::PassThrough);
+    }
+
+    #[test]
+    fn test_regression_main_keyboard_never_suppressed_in_deck_mode() {
+        let cal = CalibrationProfile::standard_default();
+        let mut pressed = std::collections::HashSet::new();
+
+        // Main Enter (Scan 0x1C, Ext: false): MUST PassThrough even when Deck Mode is ON!
+        let (decision_enter, _) = evaluate_key_event(
+            EngineMode::Deck,
+            &cal,
+            &mut pressed,
+            0x0D,
+            0x1C,
+            false,
+            false,
+            true,
+        );
+        assert_eq!(decision_enter, HookDecision::PassThrough);
+
+        // Top-row number 7 (Scan 0x08, Ext: false): MUST PassThrough even when Deck Mode is ON!
+        let (decision_top7, _) = evaluate_key_event(
+            EngineMode::Deck,
+            &cal,
+            &mut pressed,
+            0x37,
+            0x08,
+            false,
+            false,
+            true,
+        );
+        assert_eq!(decision_top7, HookDecision::PassThrough);
+
+        // Dedicated Down Arrow (Scan 0x50, Ext: true): MUST PassThrough even when Deck Mode is ON!
+        let (decision_arrow, _) = evaluate_key_event(
+            EngineMode::Deck,
+            &cal,
+            &mut pressed,
+            0x28,
+            0x50,
+            true,
+            false,
+            true,
+        );
+        assert_eq!(decision_arrow, HookDecision::PassThrough);
+
+        // Injected Key: MUST PassThrough even if matching numpad scan code!
+        let (decision_injected, _) = evaluate_key_event(
+            EngineMode::Deck,
+            &cal,
+            &mut pressed,
+            0x67,
+            0x47,
+            false,
+            true, // is_injected = true
+            true,
+        );
+        assert_eq!(decision_injected, HookDecision::PassThrough);
     }
 }

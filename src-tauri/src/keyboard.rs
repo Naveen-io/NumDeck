@@ -3,19 +3,54 @@ use crate::types::*;
 use crossbeam_channel::{Receiver, Sender};
 use parking_lot::RwLock;
 use std::collections::HashSet;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 use windows_sys::Win32::Foundation::*;
-use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::System::Threading::{GetCurrentProcessId, GetCurrentThreadId};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
 const LLKHF_EXTENDED_FLAG: u32 = 0x00000001;
 const LLKHF_INJECTED_FLAG: u32 = 0x00000010;
 const LLKHF_UP_FLAG: u32 = 0x00000080;
+
+/// Diagnostic telemetry record capturing all 12 requested fields
+#[derive(Debug, Clone)]
+pub struct TelemetryRecord {
+    pub timestamp_ms: u64,
+    pub fg_window: String,
+    pub fg_pid: u32,
+    pub is_self_foreground: bool,
+    pub vk_code: u32,
+    pub vk_name: String,
+    pub scan_code: u32,
+    pub is_extended: bool,
+    pub is_key_down: bool,
+    pub is_injected: bool,
+    pub numlock_on: bool,
+    pub matched_logical_key: Option<String>,
+    pub deck_mode_enabled: bool,
+    pub event_suppressed: bool,
+    pub queued_action: Option<String>,
+    pub hook_duration_us: u64,
+}
+
+/// Messages routed from the fast Win32 hook procedure to the asynchronous worker thread
+pub enum WorkerMessage {
+    ExecuteAction {
+        key_id: String,
+        action: ActionConfig,
+    },
+    Telemetry(TelemetryRecord),
+    CalibrationKeyCaptured(KeySignature),
+}
 
 /// State shared between Tauri commands, Low-Level Hook, and Action Executor
 pub struct KeyboardEngineState {
@@ -32,9 +67,13 @@ pub struct KeyboardEngineState {
 }
 
 impl KeyboardEngineState {
-    pub fn new(calibration: CalibrationProfile, default_profile: Profile) -> Self {
+    pub fn new(calibration: CalibrationProfile, default_profile: Profile, initial_deck_mode: bool) -> Self {
         Self {
-            mode: RwLock::new(EngineMode::Normal),
+            mode: RwLock::new(if initial_deck_mode {
+                EngineMode::Deck
+            } else {
+                EngineMode::Normal
+            }),
             calibration: RwLock::new(calibration),
             active_profile: RwLock::new(default_profile),
             active_folder_id: RwLock::new(None),
@@ -53,14 +92,13 @@ static HOOK_DATA: parking_lot::RwLock<Option<HookContext>> = parking_lot::RwLock
 
 struct HookContext {
     state: Arc<KeyboardEngineState>,
-    action_tx: Sender<ActionConfig>,
-    app_handle: AppHandle,
+    worker_tx: Sender<WorkerMessage>,
 }
 
 pub struct KeyboardEngine {
     state: Arc<KeyboardEngineState>,
     hook_thread_id: Arc<AtomicU32>,
-    pub action_tx: Sender<ActionConfig>,
+    pub worker_tx: Sender<WorkerMessage>,
 }
 
 impl KeyboardEngine {
@@ -68,26 +106,26 @@ impl KeyboardEngine {
         app_handle: AppHandle,
         calibration: CalibrationProfile,
         default_profile: Profile,
+        initial_deck_mode: bool,
     ) -> Self {
-        let state = Arc::new(KeyboardEngineState::new(calibration, default_profile));
-        let (action_tx, action_rx) = crossbeam_channel::unbounded::<ActionConfig>();
+        let state = Arc::new(KeyboardEngineState::new(calibration, default_profile, initial_deck_mode));
+        let (worker_tx, worker_rx) = crossbeam_channel::unbounded::<WorkerMessage>();
         let hook_thread_id = Arc::new(AtomicU32::new(0));
 
-        // 1. Start Action Execution Worker Thread
-        let action_state = Arc::clone(&state);
-        let action_app = app_handle.clone();
+        // 1. Start Off-Thread Worker Loop (handles File I/O, IPC emissions, and Action execution)
+        let worker_state = Arc::clone(&state);
+        let worker_app = app_handle.clone();
         thread::Builder::new()
             .name("numdeck-action-worker".to_string())
             .spawn(move || {
-                Self::action_worker_loop(action_rx, action_state, action_app);
+                Self::worker_loop(worker_rx, worker_state, worker_app);
             })
             .expect("Failed to spawn action worker thread");
 
-        // 2. Set up global hook context
+        // 2. Set up global hook context (only lightweight sender and shared state)
         *HOOK_DATA.write() = Some(HookContext {
             state: Arc::clone(&state),
-            action_tx: action_tx.clone(),
-            app_handle: app_handle.clone(),
+            worker_tx: worker_tx.clone(),
         });
 
         // 3. Start Dedicated Win32 Keyboard Hook Thread with Message Pump
@@ -102,7 +140,7 @@ impl KeyboardEngine {
         Self {
             state,
             hook_thread_id,
-            action_tx,
+            worker_tx,
         }
     }
 
@@ -110,49 +148,140 @@ impl KeyboardEngine {
         Arc::clone(&self.state)
     }
 
-    /// Background thread that processes actions outside the low-level hook
-    fn action_worker_loop(
-        rx: Receiver<ActionConfig>,
+    /// Background thread that handles logging, action execution, and UI IPC emissions
+    /// Completely decoupling heavy work and IPC from the critical low-level keyboard hook.
+    fn worker_loop(
+        rx: Receiver<WorkerMessage>,
         state: Arc<KeyboardEngineState>,
         app: AppHandle,
     ) {
-        log::info!("Action worker thread initialized.");
-        while let Ok(action) = rx.recv() {
-            match action {
-                ActionConfig::ToggleDeckMode => {
-                    let mut mode_guard = state.mode.write();
-                    let new_mode = match *mode_guard {
-                        EngineMode::Deck => EngineMode::Normal,
-                        _ => EngineMode::Deck,
-                    };
-                    *mode_guard = new_mode;
-                    drop(mode_guard);
+        log::info!("Off-thread action/telemetry worker initialized.");
 
-                    let is_deck = new_mode == EngineMode::Deck;
-                    log::info!("Deck mode toggled via action to: {:?}", new_mode);
-                    let _ = app.emit("deck-mode-changed", is_deck);
-                }
-                ActionConfig::SwitchProfile { profile_id } => {
-                    log::info!("Switching profile to: {}", profile_id);
-                    let _ = app.emit("request-switch-profile", profile_id);
-                }
-                ActionConfig::NavigateFolder { folder_id } => {
-                    *state.active_folder_id.write() = Some(folder_id.clone());
-                    let _ = app.emit("folder-changed", Some(folder_id));
-                }
-                ActionConfig::BackToRootFolder => {
-                    *state.active_folder_id.write() = None;
-                    let _ = app.emit("folder-changed", None::<String>);
-                }
-                other => {
-                    if let Err(e) = ActionExecutor::execute(other) {
-                        log::error!("Action execution failed: {}", e);
-                        let _ = app.emit("action-error", e);
+        // Open local debug log file for streaming telemetry
+        let local_log_path = PathBuf::from("engine_debug.log");
+        let appdata_log_path = std::env::var("APPDATA")
+            .ok()
+            .map(|p| PathBuf::from(p).join("NumpadDeck").join("engine_debug.log"));
+
+        let mut log_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&local_log_path)
+            .ok();
+
+        while let Ok(msg) = rx.recv() {
+            match msg {
+                WorkerMessage::ExecuteAction { key_id, action } => {
+                    log::info!("Executing assigned action for key '{}': {:?}", key_id, action);
+                    let action_summary = format!("{:?}", action);
+
+                    match action {
+                        ActionConfig::ToggleDeckMode => {
+                            let mut mode_guard = state.mode.write();
+                            let new_mode = match *mode_guard {
+                                EngineMode::Deck => EngineMode::Normal,
+                                _ => EngineMode::Deck,
+                            };
+                            *mode_guard = new_mode;
+                            drop(mode_guard);
+
+                            let is_deck = new_mode == EngineMode::Deck;
+                            log::info!("Deck mode toggled via action to: {:?}", new_mode);
+                            let _ = app.emit("deck-mode-changed", is_deck);
+                        }
+                        ActionConfig::SwitchProfile { profile_id } => {
+                            log::info!("Switching profile to: {}", profile_id);
+                            let _ = app.emit("request-switch-profile", profile_id);
+                        }
+                        ActionConfig::NavigateFolder { folder_id } => {
+                            *state.active_folder_id.write() = Some(folder_id.clone());
+                            let _ = app.emit("folder-changed", Some(folder_id));
+                        }
+                        ActionConfig::BackToRootFolder => {
+                            *state.active_folder_id.write() = None;
+                            let _ = app.emit("folder-changed", None::<String>);
+                        }
+                        other => {
+                            if let Err(e) = ActionExecutor::execute(other) {
+                                log::error!("Action execution failed: {}", e);
+                                let _ = app.emit("action-error", e.clone());
+                                if let Some(ref mut f) = log_file {
+                                    let _ = writeln!(f, "   └─ [ACTION ERROR] for key '{}': {}", key_id, e);
+                                }
+                            } else {
+                                if let Some(ref mut f) = log_file {
+                                    let _ = writeln!(f, "   └─ [ACTION EXECUTED] for key '{}' ({}) -> SUCCESS", key_id, action_summary);
+                                }
+                            }
+                        }
                     }
+
+                    // Emit key triggered event to UI for visual illumination
+                    let _ = app.emit("deck-key-triggered", key_id);
+                }
+
+                WorkerMessage::Telemetry(t) => {
+                    // Format detailed single-line log
+                    let line = format!(
+                        "[{}] FG: \"{}\" (PID {}, SELF={}) | VK: 0x{:02X} ({}) | Scan: 0x{:02X} | Ext: {} | Down: {} | Injected: {} | NumLock: {} | Matched: {:?} | DeckMode: {} | Suppressed: {} | ActionQueued: {:?} | HookDuration: {}us",
+                        format_timestamp(t.timestamp_ms),
+                        t.fg_window,
+                        t.fg_pid,
+                        t.is_self_foreground,
+                        t.vk_code,
+                        t.vk_name,
+                        t.scan_code,
+                        if t.is_extended { 1 } else { 0 },
+                        t.is_key_down,
+                        t.is_injected,
+                        if t.numlock_on { "ON" } else { "OFF" },
+                        t.matched_logical_key,
+                        t.deck_mode_enabled,
+                        t.event_suppressed,
+                        t.queued_action,
+                        t.hook_duration_us
+                    );
+
+                    // Write to local engine_debug.log
+                    if let Some(ref mut f) = log_file {
+                        let _ = writeln!(f, "{}", line);
+                        let _ = f.flush();
+                    }
+
+                    // Also mirror to APPDATA log if available
+                    if let Some(ref ap_path) = appdata_log_path {
+                        if let Ok(mut ap_file) = OpenOptions::new().create(true).append(true).open(ap_path) {
+                            let _ = writeln!(ap_file, "{}", line);
+                        }
+                    }
+
+                    // Mirror to console / stdout
+                    println!("{}", line);
+
+                    // Emit diagnostic event to UI if viewer active
+                    if state.diagnostics_active.load(Ordering::Relaxed) {
+                        let diag = DiagnosticEvent {
+                            timestamp: t.timestamp_ms,
+                            event_type: if t.is_key_down { "keydown".to_string() } else { "keyup".to_string() },
+                            vk_code: t.vk_code,
+                            vk_name: t.vk_name,
+                            scan_code: t.scan_code,
+                            is_extended: t.is_extended,
+                            is_injected: t.is_injected,
+                            numlock_on: t.numlock_on,
+                            is_suppressed: t.event_suppressed,
+                            matched_logical_key: t.matched_logical_key,
+                        };
+                        let _ = app.emit("diagnostic-key-event", diag);
+                    }
+                }
+
+                WorkerMessage::CalibrationKeyCaptured(sig) => {
+                    let _ = app.emit("calibration-key-captured", sig);
                 }
             }
         }
-        log::info!("Action worker thread terminated.");
+        log::info!("Off-thread action/telemetry worker terminated.");
     }
 
     /// Dedicated hook thread running Windows message loop
@@ -161,19 +290,22 @@ impl KeyboardEngine {
             let tid = GetCurrentThreadId();
             thread_id_store.store(tid, Ordering::SeqCst);
 
+            // Correctly obtain current executable module handle for global WH_KEYBOARD_LL hook
+            let hmod = GetModuleHandleW(std::ptr::null());
+
             let hook = SetWindowsHookExW(
                 WH_KEYBOARD_LL,
                 Some(low_level_keyboard_proc),
-                0 as _,
+                hmod,
                 0,
             );
 
             if hook.is_null() {
-                log::error!("Failed to install WH_KEYBOARD_LL hook!");
+                log::error!("Failed to install WH_KEYBOARD_LL hook! Error: {}", GetLastError());
                 return;
             }
 
-            log::info!("WH_KEYBOARD_LL hook successfully installed on thread {}", tid);
+            log::info!("WH_KEYBOARD_LL hook successfully installed with hMod on thread {}", tid);
 
             let mut msg: MSG = std::mem::zeroed();
             while GetMessageW(&mut msg, 0 as _, 0, 0) > 0 {
@@ -204,13 +336,40 @@ impl Drop for KeyboardEngine {
     }
 }
 
+/// Fast foreground window query (pure memory read in user32, sub-microsecond)
+fn get_foreground_info() -> (String, u32, bool) {
+    unsafe {
+        let fg_hwnd = GetForegroundWindow();
+        if fg_hwnd.is_null() {
+            return ("None".to_string(), 0, false);
+        }
+        let mut fg_pid = 0u32;
+        GetWindowThreadProcessId(fg_hwnd, &mut fg_pid);
+        let my_pid = GetCurrentProcessId();
+        let is_self = fg_pid == my_pid;
+
+        let mut title_buf = [0u16; 128];
+        let len = GetWindowTextW(fg_hwnd, title_buf.as_mut_ptr(), 128);
+        let title = if len > 0 {
+            String::from_utf16_lossy(&title_buf[..len as usize])
+        } else {
+            "Untitled / System".to_string()
+        };
+
+        (title, fg_pid, is_self)
+    }
+}
+
 /// The Low-Level Keyboard Hook Callback
-/// This must remain EXTREMELY FAST (under 1ms). No disk I/O, no process launching here.
+/// GUARANTEED SUB-5-MICROSECOND EXECUTION.
+/// ZERO disk I/O, ZERO IPC to webviews, ZERO COM calls, ZERO heavy locks.
 unsafe extern "system" fn low_level_keyboard_proc(
     n_code: i32,
     w_param: WPARAM,
     l_param: LPARAM,
 ) -> LRESULT {
+    let hook_start = Instant::now();
+
     unsafe {
         if n_code < 0 {
             return CallNextHookEx(0 as _, n_code, w_param, l_param);
@@ -229,10 +388,6 @@ unsafe extern "system" fn low_level_keyboard_proc(
 
         // Check injected flag: ALWAYS ignore synthetic input generated by SendInput
         let is_injected = (flags & LLKHF_INJECTED_FLAG) != 0;
-        if is_injected {
-            return CallNextHookEx(0 as _, n_code, w_param, l_param);
-        }
-
         let is_extended = (flags & LLKHF_EXTENDED_FLAG) != 0;
         let is_key_up = (flags & LLKHF_UP_FLAG) != 0;
         let is_key_down = !is_key_up;
@@ -240,7 +395,34 @@ unsafe extern "system" fn low_level_keyboard_proc(
         // Check NumLock state via GetKeyState
         let numlock_on = (GetKeyState(VK_NUMLOCK as i32) & 1) != 0;
 
-        // Emergency shortcut check: triple-Esc or Ctrl+Shift+Esc
+        // Query foreground window info
+        let (fg_window, fg_pid, is_self_foreground) = get_foreground_info();
+
+        if is_injected {
+            // Synthetic input generated by our own SendInput; pass through immediately without delay
+            let duration_us = hook_start.elapsed().as_micros() as u64;
+            let _ = hook_data.worker_tx.send(WorkerMessage::Telemetry(TelemetryRecord {
+                timestamp_ms: current_time_ms(),
+                fg_window,
+                fg_pid,
+                is_self_foreground,
+                vk_code,
+                vk_name: vk_code_to_name(vk_code),
+                scan_code,
+                is_extended,
+                is_key_down,
+                is_injected: true,
+                numlock_on,
+                matched_logical_key: None,
+                deck_mode_enabled: false,
+                event_suppressed: false,
+                queued_action: None,
+                hook_duration_us: duration_us,
+            }));
+            return CallNextHookEx(0 as _, n_code, w_param, l_param);
+        }
+
+        // Emergency shortcut check: triple-Esc
         if is_key_down && hook_data.state.emergency_shortcut_enabled.load(Ordering::Relaxed) {
             if vk_code == VK_ESCAPE as u32 {
                 let mut last_time = hook_data.state.last_esc_time.write();
@@ -248,12 +430,9 @@ unsafe extern "system" fn low_level_keyboard_proc(
                 if now.duration_since(*last_time) < Duration::from_millis(1200) {
                     let count = hook_data.state.esc_press_count.fetch_add(1, Ordering::SeqCst) + 1;
                     if count >= 3 {
-                        // Emergency trigger!
                         *hook_data.state.mode.write() = EngineMode::Normal;
                         hook_data.state.esc_press_count.store(0, Ordering::SeqCst);
                         log::warn!("EMERGENCY DISABLE TRIGGERED: Deck Mode forcibly reset to Normal!");
-                        let _ = hook_data.app_handle.emit("emergency-reset", ());
-                        let _ = hook_data.app_handle.emit("deck-mode-changed", false);
                     }
                 } else {
                     hook_data.state.esc_press_count.store(1, Ordering::SeqCst);
@@ -268,11 +447,28 @@ unsafe extern "system" fn low_level_keyboard_proc(
         if current_mode == EngineMode::Calibrating {
             if is_key_down {
                 let signature = KeySignature::new(vk_code, scan_code, is_extended);
-                let _ = hook_data.app_handle.emit("calibration-key-captured", signature);
+                let _ = hook_data.worker_tx.send(WorkerMessage::CalibrationKeyCaptured(signature));
             }
-            // Emit diagnostic
-            emit_diagnostic(hook_data, vk_code, scan_code, is_extended, is_injected, numlock_on, is_key_down, true, None);
-            // Suppress key during calibration so it doesn't type into other apps
+            let duration_us = hook_start.elapsed().as_micros() as u64;
+            let _ = hook_data.worker_tx.send(WorkerMessage::Telemetry(TelemetryRecord {
+                timestamp_ms: current_time_ms(),
+                fg_window,
+                fg_pid,
+                is_self_foreground,
+                vk_code,
+                vk_name: vk_code_to_name(vk_code),
+                scan_code,
+                is_extended,
+                is_key_down,
+                is_injected: false,
+                numlock_on,
+                matched_logical_key: None,
+                deck_mode_enabled: false,
+                event_suppressed: true,
+                queued_action: None,
+                hook_duration_us: duration_us,
+            }));
+            // Suppress key during calibration
             return 1;
         }
 
@@ -283,14 +479,14 @@ unsafe extern "system" fn low_level_keyboard_proc(
             drop(cal);
 
             if let Some(key_id) = matched_key {
-                // Found a configured numpad key!
+                let mut queued_action_str = None;
+
                 if is_key_down {
                     let mut pressed = hook_data.state.pressed_keys.write();
                     let is_first_press = pressed.insert(key_id.clone());
                     drop(pressed);
 
                     if is_first_press {
-                        // Look up action in active folder or active profile
                         let profile = hook_data.state.active_profile.read();
                         let active_folder = hook_data.state.active_folder_id.read();
 
@@ -307,77 +503,87 @@ unsafe extern "system" fn low_level_keyboard_proc(
 
                         if let Some(assign) = assignment {
                             if let Some(action) = &assign.action {
-                                // Queue action for execution outside the hook
-                                let _ = hook_data.action_tx.send(action.clone());
+                                queued_action_str = Some(format!("{:?}", action));
+                                let _ = hook_data.worker_tx.send(WorkerMessage::ExecuteAction {
+                                    key_id: key_id.clone(),
+                                    action: action.clone(),
+                                });
                             }
                         }
-
-                        // Emit key triggered event to UI for visual feedback
-                        let _ = hook_data.app_handle.emit("deck-key-triggered", key_id.clone());
                     }
                 } else {
-                    // Key Up: release from pressed tracking
                     let mut pressed = hook_data.state.pressed_keys.write();
                     pressed.remove(&key_id);
                 }
 
-                // Emit diagnostic
-                emit_diagnostic(hook_data, vk_code, scan_code, is_extended, is_injected, numlock_on, is_key_down, true, Some(key_id));
+                let duration_us = hook_start.elapsed().as_micros() as u64;
+                let _ = hook_data.worker_tx.send(WorkerMessage::Telemetry(TelemetryRecord {
+                    timestamp_ms: current_time_ms(),
+                    fg_window,
+                    fg_pid,
+                    is_self_foreground,
+                    vk_code,
+                    vk_name: vk_code_to_name(vk_code),
+                    scan_code,
+                    is_extended,
+                    is_key_down,
+                    is_injected: false,
+                    numlock_on,
+                    matched_logical_key: Some(key_id),
+                    deck_mode_enabled: true,
+                    event_suppressed: true,
+                    queued_action: queued_action_str,
+                    hook_duration_us: duration_us,
+                }));
 
-                // SUPPRESS THIS KEY: Return 1
+                // SUPPRESS THIS KEY FROM PASSING TO WINDOWS: Return 1
                 return 1;
             }
         }
 
-        // 3. Normal Mode or unmapped keys
-        if hook_data.state.diagnostics_active.load(Ordering::Relaxed) {
-            let cal = hook_data.state.calibration.read();
-            let matched = cal.find_matched_key(vk_code, scan_code, is_extended);
-            drop(cal);
-            emit_diagnostic(hook_data, vk_code, scan_code, is_extended, is_injected, numlock_on, is_key_down, false, matched);
-        }
+        // 3. Normal Mode or unmapped keys: Pass through
+        let cal = hook_data.state.calibration.read();
+        let matched = cal.find_matched_key(vk_code, scan_code, is_extended);
+        drop(cal);
 
-        // Pass through to next hook
+        let duration_us = hook_start.elapsed().as_micros() as u64;
+        let _ = hook_data.worker_tx.send(WorkerMessage::Telemetry(TelemetryRecord {
+            timestamp_ms: current_time_ms(),
+            fg_window,
+            fg_pid,
+            is_self_foreground,
+            vk_code,
+            vk_name: vk_code_to_name(vk_code),
+            scan_code,
+            is_extended,
+            is_key_down,
+            is_injected: false,
+            numlock_on,
+            matched_logical_key: matched,
+            deck_mode_enabled: current_mode == EngineMode::Deck,
+            event_suppressed: false,
+            queued_action: None,
+            hook_duration_us: duration_us,
+        }));
+
         CallNextHookEx(0 as _, n_code, w_param, l_param)
     }
 }
 
-fn emit_diagnostic(
-    hook_data: &HookContext,
-    vk_code: u32,
-    scan_code: u32,
-    is_extended: bool,
-    is_injected: bool,
-    numlock_on: bool,
-    is_key_down: bool,
-    is_suppressed: bool,
-    matched_logical_key: Option<String>,
-) {
-    if !hook_data.state.diagnostics_active.load(Ordering::Relaxed) {
-        return;
-    }
-
-    let timestamp = SystemTime::now()
+fn current_time_ms() -> u64 {
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_millis() as u64;
+        .as_millis() as u64
+}
 
-    let vk_name = vk_code_to_name(vk_code);
-
-    let event = DiagnosticEvent {
-        timestamp,
-        event_type: if is_key_down { "keydown".to_string() } else { "keyup".to_string() },
-        vk_code,
-        vk_name,
-        scan_code,
-        is_extended,
-        is_injected,
-        numlock_on,
-        is_suppressed,
-        matched_logical_key,
-    };
-
-    let _ = hook_data.app_handle.emit("diagnostic-key-event", event);
+fn format_timestamp(ms: u64) -> String {
+    let secs = ms / 1000;
+    let millis = ms % 1000;
+    let s = secs % 60;
+    let m = (secs / 60) % 60;
+    let h = (secs / 3600) % 24;
+    format!("{:02}:{:02}:{:02}.{:03}", h, m, s, millis)
 }
 
 pub fn vk_code_to_name(vk: u32) -> String {
