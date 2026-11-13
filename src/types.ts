@@ -58,6 +58,7 @@ export interface Profile {
   icon: string;
   keys: Record<string, KeyAssignment>;
   folders: DeckFolder[];
+  app_association?: string;
 }
 
 export interface AppSettings {

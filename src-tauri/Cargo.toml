@@ -1,8 +1,9 @@
 [package]
 name = "numdeck"
-version = "0.1.0"
-description = "Numpad Deck - Physical Numeric Keypad Macro Deck"
-authors = ["Numdeck Team"]
+version = "1.0.0"
+description = "NumDeck - Turn your ordinary numpad into a customizable Stream Deck-style shortcut controller for Windows"
+authors = ["Naveen (https://github.com/Naveen-io)"]
+license = "MIT"
 edition = "2024"
 rust-version = "1.90"
 

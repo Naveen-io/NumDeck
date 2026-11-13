@@ -157,6 +157,46 @@ export const BlenderIcon: React.FC<AppIconProps> = ({ size = 20, className = '' 
   </svg>
 );
 
+// 17. Microsoft Excel
+export const ExcelIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#107C41" />
+    <path d="M14 14L34 34M34 14L14 34" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round"/>
+  </svg>
+);
+
+// 18. Microsoft Word
+export const WordIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#185ABD" />
+    <path d="M12 16L18 32L24 19L30 32L36 16" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+);
+
+// 19. Microsoft Teams
+export const TeamsIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#6264A7" />
+    <circle cx="31" cy="18" r="4.5" fill="#FFFFFF"/>
+    <path d="M26 27C26 24.5 28.2 22.5 31 22.5C33.8 22.5 36 24.5 36 27V32H26V27Z" fill="#FFFFFF"/>
+    <circle cx="19" cy="20" r="5.5" fill="#FFFFFF"/>
+    <path d="M12 31C12 28 15 25.5 19 25.5C23 25.5 26 28 26 31V35H12V31Z" fill="#FFFFFF"/>
+  </svg>
+);
+
+// 20. Slack
+export const SlackIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#4A154B" />
+    <circle cx="16" cy="21" r="3" fill="#36C5F0"/>
+    <rect x="21" y="18" width="11" height="6" rx="3" fill="#2EB67D"/>
+    <circle cx="27" cy="16" r="3" fill="#2EB67D"/>
+    <rect x="18" y="21" width="6" height="11" rx="3" fill="#ECB22E"/>
+    <circle cx="32" cy="27" r="3" fill="#E01E5A"/>
+    <rect x="16" y="24" width="11" height="6" rx="3" fill="#36C5F0"/>
+  </svg>
+);
+
 // Registry of supported applications for fast lookup
 export const KNOWN_APP_ICONS: Record<string, React.FC<AppIconProps>> = {
   chrome: ChromeIcon,
@@ -181,6 +221,11 @@ export const KNOWN_APP_ICONS: Record<string, React.FC<AppIconProps>> = {
   photoshop: PhotoshopIcon,
   premiere: PremiereIcon,
   blender: BlenderIcon,
+  excel: ExcelIcon,
+  word: WordIcon,
+  teams: TeamsIcon,
+  msteams: TeamsIcon,
+  slack: SlackIcon,
 };
 
 export const getAppIconComponent = (iconKey: string): React.FC<AppIconProps> | null => {

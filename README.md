@@ -1,203 +1,148 @@
-# NUMPAD DECK
-
-> Transform your physical numeric keypad into an automated, hardware-accelerated macro deck for Windows.
-
-[![Windows 10/11 Compatible](https://img.shields.io/badge/Windows-10%20%7C%2011-blue?logo=windows)](https://microsoft.com/windows)
-[![Tauri 2.0](https://img.shields.io/badge/Tauri-2.0-24C8D8?logo=tauri)](https://tauri.app)
-[![Rust Backend](https://img.shields.io/badge/Rust-MSVC-DEA584?logo=rust)](https://rust-lang.org)
-[![React 19 + TypeScript](https://img.shields.io/badge/React-19%20%7C%20TypeScript-61DAFB?logo=react)](https://react.dev)
-[![Strict Dark UI](https://img.shields.io/badge/UI-Precision%20Industrial%20Matte-191E28)](https://github.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<p align="center">
+  <img src="public/logo.svg" alt="NumDeck Logo" width="380" />
+</p>
 
 <p align="center">
-  <img src="docs/images/app-screenshot.png" alt="NUMPAD DECK Workspace Preview" width="850" style="border-radius: 12px; border: 1px solid #252C39; box-shadow: 0 20px 40px rgba(0,0,0,0.6);" />
+  <strong>Turn your ordinary numpad into a customizable Stream Deck-style shortcut controller for Windows.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Naveen-io/NumDeck/releases"><img src="https://img.shields.io/github/v/release/Naveen-io/NumDeck?color=blue&label=Release" alt="Release"></a>
+  <a href="https://microsoft.com/windows"><img src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?logo=windows" alt="Windows 10/11"></a>
+  <a href="https://rust-lang.org"><img src="https://img.shields.io/badge/Backend-Rust%20%28Low--Level%20Hook%29-DEA584?logo=rust" alt="Rust Backend"></a>
+  <a href="https://react.dev"><img src="https://img.shields.io/badge/Frontend-React%2019%20%7C%20TypeScript-61DAFB?logo=react" alt="React 19"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
 </p>
 
 ---
 
-## 1. Executive Summary & Architecture Reboot
+<p align="center">
+  <img src="assets/screenshots/numdeck_workspace.png" alt="NumDeck Main Workspace" width="900" style="border-radius: 12px; border: 1px solid #1F2532;" />
+</p>
 
-**NUMPAD DECK** has been completely rebuilt from zero to eliminate the keyboard event correlation flaws of previous implementations.
+## Overview
 
-### Why Previous Approaches Failed
-Previous attempts attempted to correlate Windows Raw Input (`WM_INPUT`) and Low-Level Keyboard Hooks (`WH_KEYBOARD_LL`) via a shared `latest_device` global variable. This failed fundamentally because:
-1. Windows delivers `WM_INPUT` and `WH_KEYBOARD_LL` asynchronously on different timing schedules.
-2. An event from one API does not arrive before the other in a guaranteed order.
-3. Rapid typing causes race conditions and missed correlations.
-4. Laptops integrate numeric keypads into the exact same device ID as the main alphanumeric keyboard, making Raw Input device enumeration useless for isolating numpad keys.
+**NumDeck** transforms any standard physical numeric keypad into a powerful, customizable desktop macro controller—bringing the convenience of expensive macro pads and Stream Decks to your existing laptop keyboard or USB numpad with **zero additional hardware cost**.
 
-### The Authoritative Architecture
-NUMPAD DECK uses a **single authoritative pipeline based on `WH_KEYBOARD_LL`** with raw `KBDLLHOOKSTRUCT` hardware fields:
-- **Scan Code (`scanCode`)**: The physical OEM hardware switch index reported directly by keyboard firmware (e.g., `0x47` for physical Key 7, `0x1C` for Enter, `0x35` for `/`, `0x4A` for `-`, `0x4E` for `+`).
-- **Extended Flag (`LLKHF_EXTENDED = 0x01`)**: Identifies whether the key is an extended cluster key.
-  - **Numpad Enter** has `LLKHF_EXTENDED = 1`; **Main Enter** has `LLKHF_EXTENDED = 0`.
-  - **Numpad Navigation Keys (NumLock OFF)** have `LLKHF_EXTENDED = 0`; **Dedicated Arrow/Navigation Keys** have `LLKHF_EXTENDED = 1`.
-  - **Numpad Numbers (NumLock ON)** have distinct scan codes (`0x47`–`0x53`) from top-row number keys (`0x02`–`0x0B`).
-- **Injected Flag (`LLKHF_INJECTED = 0x10`)**: The hook instantly passes through any synthetic input created via `SendInput`. This strictly prevents recursive execution loops when typing text or sending hotkeys.
-- **Off-Thread Action Dispatch**: The hook callback executes in under **0.05 ms** (non-blocking) and queues all actions to a dedicated crossbeam worker thread.
-- **Fail-Safe Disarm**: Low-level hardware disarm: **triple-tap ESC** (3 times in under 1.2s) instantly resets the engine to Normal Mode.
+Whether you're streaming, coding, gaming, editing video, or navigating spreadsheets, NumDeck gives you 17 dedicated tactile hotkeys right under your right hand while allowing you to toggle instantly back to standard number typing at any time.
 
 ---
 
-## 2. Quick Start & Execution
+## Key Features
 
-### Standalone Executable (Zero Installation Required)
-Launch directly from the repository root:
-- Double-click **`NumpadDeck.exe`** (9.70 MB) or **`Start.bat`**
-- Memory footprint: **~38 MB RAM** at idle.
+- **Proportional Physical Numpad Canvas**: A faithful digital representation of your physical keyboard's numeric keypad, including double-height **Enter**, double-height **Add (+)**, and double-width **Zero (0)** keys.
+- **Two Operational Modes**:
+  - **Deck Mode**: Keys trigger configured applications, URLs, media controls, and multi-key shortcuts with immediate visual and audio feedback.
+  - **Normal Mode**: Keypad functions normally for numeric data entry and navigation.
+- **Instant Mode Switching**: Switch modes instantly with a single click, via the dedicated Deck Toggle key, or through your system tray.
+- **Pre-Configured Workflow Profiles**: Includes ready-to-use layouts out of the box:
+  - **General**: Browser, Calculator, Notepad, Terminal, Screenshot, Media Controls, and PC Lock.
+  - **Gaming**: Discord, Steam, Spotify, and streaming shortcuts.
+  - **Coding**: VS Code, Windows Terminal, Visual Studio, and local dev server shortcuts.
+  - **Streaming**: OBS Studio control, Discord mute, and Spotify playback.
+  - **Editing**: Adobe Photoshop, Premiere Pro, Blender, and media playback.
+  - **Productivity**: Excel, Word, Teams, Slack, and quick snippet paste.
+- **Profile Management & Import/Export**: Create, duplicate, rename, backup, and share custom profiles as clean `.json` files.
+- **Target Application Association**: Link profiles to specific executable processes (e.g., `code.cmd`, `obs64.exe`, `excel.exe`) for fast recognition.
+- **Quick Presets Library**: Assign popular desktop apps and system shortcuts with a single click—no manual path hunting required.
+- **Low-Latency Native Rust Input Engine**: Utilizes Windows low-level keyboard hooks (`WH_KEYBOARD_LL`) with physical hardware scan codes (`scanCode`) and cluster extension bits (`LLKHF_EXTENDED`), guaranteeing zero input latency (< 0.05 ms) and 100% isolation from your main keyboard digits and arrow keys.
+- **Hardware Fail-Safe Disarm**: Low-level safety protection: triple-tap **ESC** (3 times in under 1.2s) instantly disarms Deck Mode if you ever need immediate emergency keyboard recovery.
+- **Optional Calibration**: Ready out of the box for standard keyboards, with an optional 17-key calibration wizard for specialized or custom-layout external keypads.
+- **Distraction-Free Desktop UI**: Designed in the style of professional hardware utilities like Elgato Stream Deck software—flat dark slate aesthetics, high-contrast application icons, and zero decorative motion lag.
 
-### Production Installer
-- **NSIS Setup**: `NumpadDeck-Setup.exe` (2.38 MB)
-- **MSI Package**: `src-tauri/target/release/bundle/msi/Numpad Deck_1.0.0_x64_en-US.msi` (3.38 MB)
+---
 
-### Development & Build Commands
+## Home Overview Dashboard
+
+<p align="center">
+  <img src="assets/screenshots/numdeck_home.png" alt="NumDeck Home Overview" width="900" style="border-radius: 12px; border: 1px solid #1F2532;" />
+</p>
+
+---
+
+## Keyboard Compatibility
+
+NumDeck works out of the box across all modern Windows configurations:
+
+| Hardware Type | Supported | Notes |
+| :--- | :---: | :--- |
+| **Built-in Laptop Keypads** | &#10004; | Works seamlessly even when integrated into the main laptop keyboard controller |
+| **External USB Numpads** | &#10004; | Plug-and-play with standard OEM scan codes |
+| **Wireless / Bluetooth Numpads** | &#10004; | Fully supported via standard Windows HID driver events |
+| **Full-size Desktop Keyboards** | &#10004; | Isolates numpad keys from top-row digits and dedicated arrow clusters |
+| **NumLock ON / OFF** | &#10004; | Symmetrically handles both numeric and navigation scan codes |
+
+---
+
+## Installation
+
+### Option 1: Windows Installer (Recommended)
+1. Download **`NumpadDeck-Setup.exe`** from the latest [GitHub Releases](https://github.com/Naveen-io/NumDeck/releases).
+2. Run the installer and follow the quick setup wizard.
+3. Launch **NumDeck** from your Start Menu or Desktop.
+
+### Option 2: Portable Standalone Executable
+1. Download **`NumpadDeck.exe`** from the [GitHub Releases](https://github.com/Naveen-io/NumDeck/releases).
+2. Place it in any directory and double-click to launch—no installation or admin rights required.
+
+---
+
+## How to Use NumDeck
+
+1. **Launch NumDeck**: The application opens in **Normal Mode** with your hardware NumLock state automatically detected.
+2. **Explore Profiles**: Select a profile from the top dropdown or open **Profiles** to create your own custom workflow.
+3. **Configure Keys**: Click any key on the digital numpad to view its properties in the right inspector. Choose from the **Quick Presets** or click **Configure** to assign custom apps, websites, hotkeys, or text snippets.
+4. **Enable Deck Mode**: Toggle Deck Mode via the button in the top bar, the sidebar toggle, or your physical keypad toggle key.
+5. **Press Physical Keys**: Press any key on your physical numpad to execute its assigned macro.
+6. **Return to Normal Typing**: Disable Deck Mode whenever you need to use your keypad for standard calculations or data entry.
+
+> [!TIP]
+> **Emergency Disarm**: If you ever need to disarm Deck Mode instantly from anywhere in Windows, simply tap your keyboard's **Escape key 3 times** in rapid succession.
+
+---
+
+## Developer Guide & Building from Source
+
+### Prerequisites
+- [Node.js](https://nodejs.org) (v18 or newer)
+- [Rust & Cargo](https://rustup.rs) (1.80+ with MSVC toolchain on Windows)
+- Visual Studio C++ Build Tools
+
+### Setup & Compilation
+
 ```bash
-# 1. Install frontend dependencies
+# 1. Clone the repository
+git clone https://github.com/Naveen-io/NumDeck.git
+cd NumDeck
+
+# 2. Install frontend dependencies
 npm install
 
-# 2. Run automated Rust test suite (verifies key signature isolation)
+# 3. Run in local development mode
+npm run dev
+
+# 4. Run unit and integration tests
 cargo test --manifest-path src-tauri/Cargo.toml
 
-# 3. Compile frontend bundle
-npm run build
-
-# 4. Build release executable
-cargo build --release --manifest-path src-tauri/Cargo.toml
-
-# 5. Build full production installers (NSIS + MSI)
+# 5. Build production executable & installer
 npx @tauri-apps/cli build
 ```
 
----
-
-## 3. Brand Identity & Visual Design System
-
-NUMPAD DECK features an original industrial design language crafted specifically for precision desktop utilities:
-
-### 1. Palette & Typography
-- **Core Dark Matte Palette**: Pure void `#08090C`, structural charcoal `#0D0F14`, surface card `#12151C`, subtle border `#191E28`, interactive border `#252C39`.
-- **Focal Accent**: Calibrated cobalt `#397BFF` with subdued focus rings.
-- **High-Legibility Neutral Text**: Primary `#F4F6FA`, secondary `#929CAC`, muted `#505A69`.
-- **Zero Emojis**: 100% strict policy—no emojis anywhere in navigation, modals, buttons, or status badges.
-
-### 2. Realistic 17-Key Mechanical Workspace
-The deck workspace accurately mirrors physical mechanical numpad dimensions:
-- **Numpad Add (`+`)**: Tall vertical key spanning 2 rows.
-- **Numpad Enter**: Tall vertical key spanning 2 rows.
-- **Numpad 0**: Wide horizontal key spanning 2 columns.
-- **Tactile Keycaps**: Dual-tone chamfered keycaps, LED state dots, tactile physical labels, and subtle micro-shadows.
-
-### 3. Application & UI Icon System
-- **Lucide React**: Integrated vector icon set for all interface navigation, window controls, and actions.
-- **16 Official Monochrome Brand Icons**: Custom scalable SVGs for Google Chrome, Microsoft Edge, Mozilla Firefox, Discord, Spotify, Visual Studio Code, Visual Studio, Steam, OBS Studio, File Explorer, Notepad, Windows Terminal, VLC Media Player, Adobe Photoshop, Adobe Premiere Pro, and Blender.
-- **Native Executable Icon Extraction**: Select any `.exe` on your system to extract its high-resolution Windows application icon via native GDI and display it directly on the numpad keycap.
+The compiled binaries will be output to `src-tauri/target/release/bundle/nsis/`.
 
 ---
 
-## 4. Core Features & Capabilities
+## Technology Stack
 
-### 1. Dual Operational Modes
-- **Normal Mode**: Keyboard works 100% normally. No keystrokes are intercepted, delayed, or altered.
-- **Deck Mode**: Selectively suppresses calibrated physical numpad keys and executes assigned macros/actions. The main keyboard, letters, top-row numbers, main Enter, and arrows remain completely untouched and usable.
-
-### 2. Guided Hardware Calibration Wizard
-- Walks the user through each physical key: `7, 8, 9, 4, 5, 6, 1, 2, 3, 0, ., /, *, -, +, Enter, NumLock`.
-- Captures live `(vk_code, scan_code, is_extended, numlock_state)`.
-- Validates each keystroke to prevent accidental capture of top-row keys, main Enter, or mouse events.
-- Stores dual signatures for both **NumLock ON** and **NumLock OFF** states.
-- Interactive test playground illuminates keys green as you press them.
-
-### 3. Real-Time Hardware Event Diagnostics
-- Live event viewer streaming all `KBDLLHOOKSTRUCT` events.
-- Displays: Event type (`keydown`/`keyup`), Key Name, Virtual Key (VK), OEM Scan Code, Extended Key flag, Injected status, NumLock state, Matched logical key, and Suppression status (`Suppressed` vs `Passed Through`).
-
-### 4. Comprehensive Action System
-- **Launch Application**: Executables, games, CLI tools with optional arguments (e.g. `calc.exe`, `wt.exe`).
-- **Open Path / URL**: Files, folders, URLs, and protocol links (e.g. `https://google.com`, `steam://open/main`, `discord://`).
-- **Send Hotkey**: Combinations using `Ctrl`, `Alt`, `Shift`, `Win` + target key (e.g. `Win+Shift+S`, `Ctrl+Shift+Esc`).
-- **Type Text**: Direct Unicode string typing without layout distortion.
-- **System Media**: Play/Pause, Next Track, Previous Track, Volume Up, Volume Down, Mute/Unmute.
-- **Multi-Action Sequences**: Sequential steps with configurable delays (`delay_ms`).
-- **Deck Navigation**: Switch profiles or open deck folders.
-
-### 5. Multi-Profile Management
-- 5 default profiles included: **General**, **Gaming**, **Coding**, **Editing**, **Streaming**.
-- Create, rename, duplicate, and delete profiles.
-- Atomic local persistence: safely saved to `%APPDATA%\NumpadDeck\config.json` with automatic backup (`config.json.bak`).
+- **Application Framework**: [Tauri 2](https://tauri.app)
+- **Low-Level Engine**: Native [Rust](https://rust-lang.org) with Win32 `WH_KEYBOARD_LL` hooks, non-blocking crossbeam channel dispatch, and `windows-sys` bindings.
+- **Frontend Layer**: [React 19](https://react.dev), [TypeScript](https://www.typescriptlang.org), [Tailwind CSS](https://tailwindcss.com), [Lucide Icons](https://lucide.dev).
+- **Packaging**: NSIS Windows Installer and standalone portable executable.
 
 ---
 
-## 5. Technologies Used
+## License
 
-- **Framework**: [Tauri 2.0](https://tauri.app/) (Rust MSVC native bridge)
-- **Backend Language**: [Rust 2021](https://www.rust-lang.org/) with `windows-sys` (Win32 low-level hooks, GDI, Shell API, SendInput)
-- **Frontend Stack**: [React 19](https://react.dev/), [TypeScript 5](https://www.typescriptlang.org/), [Vite](https://vitejs.dev/)
-- **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) with custom dark matte tokens
-- **Icons**: [Lucide React](https://lucide.dev/) + 16 custom brand SVGs
-- **Concurrency & Hooking**: `parking_lot::RwLock`, `crossbeam_channel`, native Windows message pump
+NumDeck is open-source software licensed under the [MIT License](LICENSE).
 
----
-
-## 6. Technical Verification & Test Results
-
-### Automated Rust Test Suite (`cargo test`)
-All 7 unit tests passed with 0 failures:
-- `test_numpad_vs_top_row_numbers`: Proves top-row numbers (`0x02`–`0x0B`) are never matched as numpad keys.
-- `test_main_enter_vs_numpad_enter`: Proves Main Enter (`Ext: 0`) is distinguished from Numpad Enter (`Ext: 1`).
-- `test_dedicated_nav_keys_vs_numpad_nav_keys_when_numlock_off`: Proves dedicated arrow/navigation keys (`Ext: 1`) are distinguished from numpad navigation keys (`Ext: 0`).
-- `test_numlock_on_and_off_both_match_same_physical_key`: Proves keys map to the same logical action in both NumLock states.
-- `test_custom_calibrated_signature`: Proves custom hardware laptop scan codes match accurately.
-- `test_default_profiles_exist`: Proves all 5 default profiles load.
-- `test_action_config_serialization`: Proves all ActionConfig types serialize and deserialize losslessly.
-
----
-
-## 7. Manual Physical Hardware Verification Checklist
-
-*(For user physical hardware testing when you wake up)*
-
-- [ ] **Launch Application**: Double-click `NumpadDeck.exe` in the root folder. Verify window opens at 1280×820 with dark theme.
-- [ ] **Inspect Key Diagnostics**:
-  - Open **Key Diagnostics** from the sidebar.
-  - Press physical numpad keys (e.g. `7`, `8`, `9`). Verify scan codes `0x47`, `0x48`, `0x49` appear.
-  - Press top-row numbers (`7`, `8`, `9`). Verify scan codes `0x08`, `0x09`, `0x0A` appear and "Matched Key" displays `-` (unmatched).
-  - Press Main Enter. Verify `Ext: 0` appears.
-  - Press Numpad Enter. Verify `Ext: 1` appears and matches `numpad_enter`.
-- [ ] **Run Calibration Wizard**:
-  - Click **Hardware Calibration** in the sidebar.
-  - Press each numpad key as prompted. Verify candidate values and confirmation.
-  - Test the playground to see keys light up green.
-- [ ] **Test Normal Mode**:
-  - Open Notepad.
-  - Ensure Deck Mode is **OFF**.
-  - Type on the numpad. Verify numbers type normally into Notepad.
-- [ ] **Test Deck Mode & Selective Suppression**:
-  - Toggle **Deck Mode** to **ON** (top bar or sidebar).
-  - Open Notepad.
-  - Press physical Numpad 8. Verify the assigned Calculator application launches, and NO number '8' is typed into Notepad (suppressed).
-  - Press physical Numpad 7. Verify browser opens.
-  - Press physical Main Enter and top-row numbers. Verify they still work normally in Notepad (not suppressed).
-- [ ] **Test Emergency Disarm**:
-  - While in Deck Mode, tap `ESC` 3 times rapidly.
-  - Verify Deck Mode toggles to Normal and notification appears.
-- [ ] **Test NumLock Toggle**:
-  - Toggle physical NumLock button on your keyboard.
-  - Verify the top bar and diagnostics update between `NumLock: ON` and `NumLock: OFF`.
-
----
-
-## 8. Contributing
-
-Contributions are welcome! If you encounter atypical keyboard hardware, unusual scan codes on international keyboards, or want to add presets:
-
-1. Fork the repository.
-2. Create a feature branch: `git checkout -b feature/hardware-preset`.
-3. Verify all tests pass: `cargo test --manifest-path src-tauri/Cargo.toml` and `npm run build`.
-4. Commit your changes: `git commit -m "feat: add support for XYZ keyboard layout"`.
-5. Push to the branch and open a Pull Request.
-
----
-
-## 9. License
-
-This project is open-source under the [MIT License](LICENSE).
+Made by **[Naveen](https://github.com/Naveen-io)**.

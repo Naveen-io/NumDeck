@@ -1,12 +1,25 @@
-# Node
+# Node dependencies & web build
 node_modules/
 dist/
 
-# Rust
+# Rust compilation target
 src-tauri/target/
 
-# Logs & temp
+# Distributables and binaries (published via GitHub Releases)
+*.exe
+*.msi
+*.dll
+
+# Secrets and environment configs
+.env
+.env.*
+*.pem
+*.key
+*.cert
+
+# Logs and system caches
 *.log
 *.tmp
+*.bak
 .DS_Store
 Thumbs.db

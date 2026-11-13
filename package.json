@@ -1,7 +1,13 @@
 {
   "name": "numdeck",
   "version": "1.0.0",
-  "description": "Numpad Deck - Transform your physical numpad into an automated deck",
+  "description": "Turn your ordinary numpad into a customizable Stream Deck-style shortcut controller for Windows.",
+  "author": "Naveen (https://github.com/Naveen-io)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Naveen-io/NumDeck.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

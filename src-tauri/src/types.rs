@@ -350,7 +350,10 @@ pub struct Profile {
     pub name: String,
     pub icon: String,
     pub keys: HashMap<String, KeyAssignment>,
+    #[serde(default)]
     pub folders: Vec<DeckFolder>,
+    #[serde(default)]
+    pub app_association: Option<String>,
 }
 
 /// Global Application Settings

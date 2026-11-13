@@ -339,6 +339,7 @@ impl ConfigManager {
             icon: "LayoutGrid".to_string(),
             keys,
             folders: vec![],
+            app_association: None,
         }
     }
 
@@ -400,6 +401,7 @@ impl ConfigManager {
             icon: "Gamepad2".to_string(),
             keys,
             folders: vec![],
+            app_association: Some("steam.exe".to_string()),
         }
     }
 
@@ -463,6 +465,7 @@ impl ConfigManager {
             icon: "Code".to_string(),
             keys,
             folders: vec![],
+            app_association: Some("code.cmd".to_string()),
         }
     }
 
@@ -527,6 +530,7 @@ impl ConfigManager {
             icon: "Film".to_string(),
             keys,
             folders: vec![],
+            app_association: Some("Photoshop.exe".to_string()),
         }
     }
 
@@ -576,6 +580,7 @@ impl ConfigManager {
             icon: "Tv".to_string(),
             keys,
             folders: vec![],
+            app_association: Some("obs64.exe".to_string()),
         }
     }
 }

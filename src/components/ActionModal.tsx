@@ -30,7 +30,7 @@ interface ActionModalProps {
 const BRAND_ICONS = [
   'chrome', 'vscode', 'terminal', 'discord', 'spotify', 'steam', 
   'obs', 'explorer', 'notepad', 'firefox', 'edge', 'visualstudio',
-  'photoshop', 'premiere', 'blender', 'vlc'
+  'photoshop', 'premiere', 'blender', 'vlc', 'excel', 'word', 'teams', 'slack'
 ];
 
 const SYSTEM_ICONS = [
