@@ -1,20 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AppData, EngineMode, KeyAssignment, ActionConfig, CalibrationProfile, Profile, domEventToNumpadKeyId } from './types';
+import { AppData, EngineMode, KeyAssignment, ActionConfig, CalibrationProfile, Profile, domEventToNumpadKeyId, NavTab } from './types';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 // Components
-import { Sidebar, NavTab } from './components/Sidebar';
+import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { NumpadDeck } from './components/NumpadDeck';
 import { KeyInspector } from './components/KeyInspector';
+import { HomeView } from './components/HomeView';
+import { SettingsView } from './components/SettingsView';
 import { CalibrationWizard } from './components/CalibrationWizard';
-import { DiagnosticViewer } from './components/DiagnosticViewer';
 import { ActionModal } from './components/ActionModal';
 import { ProfilesModal } from './components/ProfilesModal';
-import { SettingsModal } from './components/SettingsModal';
 import { OnboardingModal } from './components/OnboardingModal';
-import { AboutModal } from './components/AboutModal';
 
 const MOCK_DATA: AppData = {
   version: 1,
@@ -42,21 +41,21 @@ const MOCK_DATA: AppData = {
       icon: 'LayoutGrid',
       keys: {
         numpad_numlock: { key_id: 'numpad_numlock', label: 'Deck Toggle', icon: 'Power', color: '#397BFF', action: { type: 'ToggleDeckMode' } },
-        numpad_divide: { key_id: 'numpad_divide', label: 'Mute Audio', icon: 'VolumeX', color: '#ED7777', action: { type: 'SystemMedia', payload: { command: 'mute' } } },
-        numpad_multiply: { key_id: 'numpad_multiply', label: 'Play / Pause', icon: 'PlayPause', color: '#65C991', action: { type: 'SystemMedia', payload: { command: 'play_pause' } } },
-        numpad_subtract: { key_id: 'numpad_subtract', label: 'Volume Down', icon: 'Volume1', color: '#929CAC', action: { type: 'SystemMedia', payload: { command: 'volume_down' } } },
-        numpad_add: { key_id: 'numpad_add', label: 'Volume Up', icon: 'Volume2', color: '#397BFF', action: { type: 'SystemMedia', payload: { command: 'volume_up' } } },
+        numpad_divide: { key_id: 'numpad_divide', label: 'Mute Audio', icon: 'VolumeX', color: '#EF4444', action: { type: 'SystemMedia', payload: { command: 'mute' } } },
+        numpad_multiply: { key_id: 'numpad_multiply', label: 'Play / Pause', icon: 'PlayPause', color: '#10B981', action: { type: 'SystemMedia', payload: { command: 'play_pause' } } },
+        numpad_subtract: { key_id: 'numpad_subtract', label: 'Volume Down', icon: 'Volume1', color: '#94A3B8', action: { type: 'SystemMedia', payload: { command: 'volume_down' } } },
+        numpad_add: { key_id: 'numpad_add', label: 'Volume Up', icon: 'Volume2', color: '#3B82F6', action: { type: 'SystemMedia', payload: { command: 'volume_up' } } },
         numpad_7: { key_id: 'numpad_7', label: 'Chrome', icon: 'chrome', color: '#4285F4', action: { type: 'OpenPath', payload: { path: 'https://www.google.com' } } },
         numpad_8: { key_id: 'numpad_8', label: 'Calculator', icon: 'Calculator', color: '#E9B86A', action: { type: 'LaunchApp', payload: { path: 'calc.exe' } } },
         numpad_9: { key_id: 'numpad_9', label: 'Notepad', icon: 'notepad', color: '#0078D7', action: { type: 'LaunchApp', payload: { path: 'notepad.exe' } } },
-        numpad_4: { key_id: 'numpad_4', label: 'Prev Track', icon: 'SkipBack', color: '#929CAC', action: { type: 'SystemMedia', payload: { command: 'prev_track' } } },
+        numpad_4: { key_id: 'numpad_4', label: 'Prev Track', icon: 'SkipBack', color: '#94A3B8', action: { type: 'SystemMedia', payload: { command: 'prev_track' } } },
         numpad_5: { key_id: 'numpad_5', label: 'Explorer', icon: 'explorer', color: '#FFA000', action: { type: 'LaunchApp', payload: { path: 'explorer.exe' } } },
-        numpad_6: { key_id: 'numpad_6', label: 'Next Track', icon: 'SkipForward', color: '#929CAC', action: { type: 'SystemMedia', payload: { command: 'next_track' } } },
-        numpad_1: { key_id: 'numpad_1', label: 'Screenshot', icon: 'Camera', color: '#397BFF', action: { type: 'Hotkey', payload: { modifiers: ['win', 'shift'], key: 'S' } } },
-        numpad_2: { key_id: 'numpad_2', label: 'Task Manager', icon: 'Activity', color: '#ED7777', action: { type: 'Hotkey', payload: { modifiers: ['ctrl', 'shift'], key: 'ESCAPE' } } },
-        numpad_3: { key_id: 'numpad_3', label: 'Lock Screen', icon: 'Lock', color: '#929CAC', action: { type: 'Hotkey', payload: { modifiers: ['win'], key: 'L' } } },
-        numpad_0: { key_id: 'numpad_0', label: 'Paste Template', icon: 'Clipboard', color: '#65C991', action: { type: 'TypeText', payload: { text: 'Support Template' } } },
-        numpad_decimal: { key_id: 'numpad_decimal', label: 'Settings', icon: 'Settings', color: '#929CAC', action: { type: 'Hotkey', payload: { modifiers: ['win'], key: 'I' } } },
+        numpad_6: { key_id: 'numpad_6', label: 'Next Track', icon: 'SkipForward', color: '#94A3B8', action: { type: 'SystemMedia', payload: { command: 'next_track' } } },
+        numpad_1: { key_id: 'numpad_1', label: 'Screenshot', icon: 'Camera', color: '#3B82F6', action: { type: 'Hotkey', payload: { modifiers: ['win', 'shift'], key: 'S' } } },
+        numpad_2: { key_id: 'numpad_2', label: 'Task Manager', icon: 'Activity', color: '#EF4444', action: { type: 'Hotkey', payload: { modifiers: ['ctrl', 'shift'], key: 'ESCAPE' } } },
+        numpad_3: { key_id: 'numpad_3', label: 'Lock PC', icon: 'Lock', color: '#64748B', action: { type: 'Hotkey', payload: { modifiers: ['win'], key: 'L' } } },
+        numpad_0: { key_id: 'numpad_0', label: 'Paste Template', icon: 'Clipboard', color: '#10B981', action: { type: 'TypeText', payload: { text: 'Support Template' } } },
+        numpad_decimal: { key_id: 'numpad_decimal', label: 'Settings', icon: 'Settings', color: '#94A3B8', action: { type: 'Hotkey', payload: { modifiers: ['win'], key: 'I' } } },
         numpad_enter: { key_id: 'numpad_enter', label: 'Terminal', icon: 'terminal', color: '#4EC9B0', action: { type: 'LaunchApp', payload: { path: 'wt.exe' } } },
       },
       folders: [],
@@ -68,7 +67,7 @@ const MOCK_DATA: AppData = {
       keys: {
         numpad_7: { key_id: 'numpad_7', label: 'Discord', icon: 'discord', color: '#5865F2', action: { type: 'OpenPath', payload: { path: 'discord://' } } },
         numpad_8: { key_id: 'numpad_8', label: 'Steam', icon: 'steam', color: '#1999D4', action: { type: 'OpenPath', payload: { path: 'steam://open/main' } } },
-        numpad_9: { key_id: 'numpad_9', label: 'OBS Studio', icon: 'obs', color: '#929CAC', action: { type: 'LaunchApp', payload: { path: 'obs64.exe' } } },
+        numpad_9: { key_id: 'numpad_9', label: 'OBS Studio', icon: 'obs', color: '#94A3B8', action: { type: 'LaunchApp', payload: { path: 'obs64.exe' } } },
         numpad_4: { key_id: 'numpad_4', label: 'Spotify', icon: 'spotify', color: '#1DB954', action: { type: 'OpenPath', payload: { path: 'spotify:' } } },
       },
       folders: [],
@@ -102,7 +101,7 @@ const MOCK_DATA: AppData = {
       name: 'Streaming',
       icon: 'Tv',
       keys: {
-        numpad_7: { key_id: 'numpad_7', label: 'OBS Studio', icon: 'obs', color: '#929CAC', action: { type: 'LaunchApp', payload: { path: 'obs64.exe' } } },
+        numpad_7: { key_id: 'numpad_7', label: 'OBS Studio', icon: 'obs', color: '#94A3B8', action: { type: 'LaunchApp', payload: { path: 'obs64.exe' } } },
         numpad_8: { key_id: 'numpad_8', label: 'Discord', icon: 'discord', color: '#5865F2', action: { type: 'OpenPath', payload: { path: 'discord://' } } },
         numpad_9: { key_id: 'numpad_9', label: 'Spotify', icon: 'spotify', color: '#1DB954', action: { type: 'OpenPath', payload: { path: 'spotify:' } } },
       },
@@ -122,8 +121,6 @@ export const App: React.FC = () => {
   // Modals
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
   const [isProfilesModalOpen, setIsProfilesModalOpen] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<string | null>(null);
@@ -139,7 +136,7 @@ export const App: React.FC = () => {
         const nlState = await invoke<boolean>('get_numlock_state');
         setNumLockOn(nlState);
 
-        // Show onboarding if not yet calibrated
+        // Show onboarding only if never seen / completed
         if (!data.calibration?.is_completed) {
           setIsOnboardingOpen(true);
         }
@@ -198,7 +195,7 @@ export const App: React.FC = () => {
 
       unlistenEmergency = await listen('emergency-reset', () => {
         setIsDeckMode(false);
-        setBannerNotice('EMERGENCY DISARM TRIGGERED: Deck Mode has been deactivated.');
+        setBannerNotice('Emergency Disarm: Deck Mode deactivated.');
         setTimeout(() => setBannerNotice(null), 5000);
       });
     };
@@ -367,7 +364,7 @@ export const App: React.FC = () => {
   const handleTestAction = async (action: ActionConfig) => {
     try {
       await invoke('test_action', { action });
-      setBannerNotice(`Test action executed successfully: ${action.type}`);
+      setBannerNotice(`Action triggered: ${action.type}`);
       setTimeout(() => setBannerNotice(null), 3000);
     } catch (err) {
       console.error('Action execution failed:', err);
@@ -383,7 +380,7 @@ export const App: React.FC = () => {
       await invoke('save_calibration', { calibration: newCal });
       setAppData({ ...appData, calibration: newCal });
       setIsCalibrationOpen(false);
-      setBannerNotice('Calibration saved and verified!');
+      setBannerNotice('Keypad calibration updated successfully.');
       setTimeout(() => setBannerNotice(null), 3000);
     } catch (err) {
       console.error('Failed to save calibration:', err);
@@ -398,7 +395,7 @@ export const App: React.FC = () => {
         setAppData({ ...appData, calibration: def });
       }
       setIsCalibrationOpen(false);
-      setBannerNotice('Calibration reset to standard hardware defaults.');
+      setBannerNotice('Keypad calibration restored to defaults.');
       setTimeout(() => setBannerNotice(null), 3000);
     } catch (err) {
       console.error('Failed to reset calibration:', err);
@@ -408,8 +405,8 @@ export const App: React.FC = () => {
   if (!appData) {
     return (
       <div className="h-screen w-screen bg-[#08090C] flex flex-col items-center justify-center text-[#F4F6FA] select-none">
-        <div className="w-10 h-10 border-2 border-[#397BFF] border-t-transparent rounded-full animate-spin mb-4" />
-        <span className="text-sm font-semibold tracking-wide text-[#929CAC]">Initializing Numpad Deck Engine...</span>
+        <div className="w-8 h-8 border-2 border-[#3B82F6] border-t-transparent rounded-full mb-3" />
+        <span className="text-xs font-semibold text-[#94A3B8]">Loading NumDeck...</span>
       </div>
     );
   }
@@ -420,86 +417,106 @@ export const App: React.FC = () => {
   const selectedAssignment = selectedKeyId ? currentAssignments[selectedKeyId] : undefined;
 
   return (
-    <div className="flex h-screen w-screen bg-[#08090C] text-[#F4F6FA] overflow-hidden select-none">
-      {/* Left Sidebar */}
+    <div className="flex h-screen w-screen bg-[#08090C] text-[#F1F5F9] overflow-hidden select-none">
+      {/* 3-Tab Stream Deck Sidebar */}
       <Sidebar
         currentTab={currentTab}
-        onSelectTab={(tab) => {
-          if (tab === 'profiles') setIsProfilesModalOpen(true);
-          else if (tab === 'calibration') setIsCalibrationOpen(true);
-          else if (tab === 'settings') setIsSettingsModalOpen(true);
-          else if (tab === 'about') setIsAboutModalOpen(true);
-          else setCurrentTab(tab);
-        }}
+        onSelectTab={(tab) => setCurrentTab(tab)}
         isDeckMode={isDeckMode}
         onToggleDeckMode={handleToggleDeckMode}
-        isCalibrated={!!appData.calibration?.is_completed}
+        activeProfileName={currentProfile?.name || 'General'}
       />
 
-      {/* Main Workspace Area */}
+      {/* Main Content Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Top Bar */}
-        <TopBar
-          profiles={appData.profiles}
-          activeProfileId={appData.settings.active_profile_id}
-          onSelectProfile={handleSelectProfile}
-          activeFolderId={appData.settings.active_folder_id}
-          onNavigateBack={() => {
-            setAppData({
-              ...appData,
-              settings: { ...appData.settings, active_folder_id: undefined },
-            });
-          }}
-          isDeckMode={isDeckMode}
-          onToggleDeckMode={handleToggleDeckMode}
-          numLockOn={numLockOn}
-          isCalibrated={!!appData.calibration?.is_completed}
-          onOpenCalibration={() => setIsCalibrationOpen(true)}
-        />
+        {currentTab === 'home' && (
+          <HomeView
+            isDeckMode={isDeckMode}
+            onToggleDeckMode={handleToggleDeckMode}
+            numLockOn={numLockOn}
+            activeProfile={currentProfile}
+            profiles={appData.profiles}
+            onSelectProfile={handleSelectProfile}
+            onNavigateToDeck={() => setCurrentTab('deck')}
+            onNavigateToSettings={() => setCurrentTab('settings')}
+            onOpenCalibration={() => setIsCalibrationOpen(true)}
+          />
+        )}
 
-        {/* Floating Banner Notification */}
-        {bannerNotice && (
-          <div className="bg-[#397BFF]/20 border-b border-[#397BFF]/40 text-[#F4F6FA] px-6 py-2 text-xs font-semibold flex items-center justify-between shrink-0">
-            <span>{bannerNotice}</span>
-            <button
-              onClick={() => setBannerNotice(null)}
-              className="text-[#929CAC] hover:text-white text-xs ml-4"
-            >
-              Dismiss
-            </button>
+        {currentTab === 'deck' && (
+          <div className="flex-1 flex flex-col h-full overflow-hidden">
+            {/* Top Bar for Deck Workspace */}
+            <TopBar
+              profiles={appData.profiles}
+              activeProfileId={appData.settings.active_profile_id}
+              onSelectProfile={handleSelectProfile}
+              onManageProfiles={() => setIsProfilesModalOpen(true)}
+              activeFolderId={appData.settings.active_folder_id}
+              onNavigateBack={() => {
+                setAppData({
+                  ...appData,
+                  settings: { ...appData.settings, active_folder_id: undefined },
+                });
+              }}
+              isDeckMode={isDeckMode}
+              onToggleDeckMode={handleToggleDeckMode}
+              numLockOn={numLockOn}
+              isCalibrated={!!appData.calibration?.is_completed}
+              onOpenCalibration={() => setIsCalibrationOpen(true)}
+            />
+
+            {/* Notification Banner */}
+            {bannerNotice && (
+              <div className="bg-[#1D4ED8]/20 border-b border-[#3B82F6]/40 text-[#F1F5F9] px-6 py-2 text-xs font-semibold flex items-center justify-between shrink-0">
+                <span>{bannerNotice}</span>
+                <button
+                  onClick={() => setBannerNotice(null)}
+                  className="text-[#94A3B8] hover:text-white text-xs ml-4 cursor-pointer"
+                >
+                  Dismiss
+                </button>
+              </div>
+            )}
+
+            {/* Deck Surface & Property Inspector */}
+            <div className="flex-1 flex h-[calc(100vh-3.5rem)] overflow-hidden">
+              <NumpadDeck
+                assignments={currentAssignments}
+                selectedKeyId={selectedKeyId}
+                onSelectKey={(kId) => setSelectedKeyId(kId)}
+                activeTriggeredKeyId={activeTriggeredKeyId}
+                isDeckMode={isDeckMode}
+                profileName={currentProfile?.name || 'General'}
+              />
+
+              <KeyInspector
+                selectedKeyId={selectedKeyId}
+                assignment={selectedAssignment}
+                onEditAction={() => setIsActionModalOpen(true)}
+                onRemoveAction={handleRemoveKeyAssignment}
+                onTestAction={handleTestAction}
+                onQuickAssign={handleSaveKeyAssignment}
+              />
+            </div>
           </div>
         )}
 
-        {/* Content depending on currentTab */}
-        {currentTab === 'deck' ? (
-          <div className="flex-1 flex h-[calc(100vh-3.5rem)] overflow-hidden">
-            {/* Center: 17-Key Numpad Deck Surface */}
-            <NumpadDeck
-              assignments={currentAssignments}
-              selectedKeyId={selectedKeyId}
-              onSelectKey={(kId) => setSelectedKeyId(kId)}
-              activeTriggeredKeyId={activeTriggeredKeyId}
-              isDeckMode={isDeckMode}
-              profileName={currentProfile?.name || 'General'}
-            />
-
-            {/* Right: Key Inspector */}
-            <KeyInspector
-              selectedKeyId={selectedKeyId}
-              assignment={selectedAssignment}
-              calibration={appData.calibration}
-              onEditAction={() => setIsActionModalOpen(true)}
-              onRemoveAction={handleRemoveKeyAssignment}
-              onTestAction={handleTestAction}
-              onQuickAssign={handleSaveKeyAssignment}
-            />
-          </div>
-        ) : (
-          <DiagnosticViewer numLockOn={numLockOn} isDeckMode={isDeckMode} />
+        {currentTab === 'settings' && (
+          <SettingsView
+            settings={appData.settings}
+            onUpdateSettings={async (updated) => {
+              setAppData({ ...appData, settings: updated });
+              await invoke('save_settings', { settings: updated });
+            }}
+            calibration={appData.calibration}
+            numLockOn={numLockOn}
+            onOpenCalibration={() => setIsCalibrationOpen(true)}
+            onResetCalibration={handleResetCalibration}
+          />
         )}
       </div>
 
-      {/* Modals */}
+      {/* Action Configuration Modal */}
       {isActionModalOpen && selectedKeyId && (
         <ActionModal
           keyId={selectedKeyId}
@@ -511,6 +528,7 @@ export const App: React.FC = () => {
         />
       )}
 
+      {/* Profiles Management Modal */}
       {isProfilesModalOpen && (
         <ProfilesModal
           profiles={appData.profiles}
@@ -524,23 +542,7 @@ export const App: React.FC = () => {
         />
       )}
 
-      {isSettingsModalOpen && (
-        <SettingsModal
-          settings={appData.settings}
-          onUpdateSettings={async (updated) => {
-            setAppData({ ...appData, settings: updated });
-            await invoke('save_settings', { settings: updated });
-          }}
-          onResetCalibration={handleResetCalibration}
-          onClose={() => setIsSettingsModalOpen(false)}
-          isCalibrated={!!appData.calibration?.is_completed}
-        />
-      )}
-
-      {isAboutModalOpen && (
-        <AboutModal onClose={() => setIsAboutModalOpen(false)} />
-      )}
-
+      {/* Calibration Wizard Modal */}
       {isCalibrationOpen && (
         <CalibrationWizard
           initialCalibration={appData.calibration}
@@ -552,6 +554,7 @@ export const App: React.FC = () => {
         />
       )}
 
+      {/* Onboarding Flow */}
       {isOnboardingOpen && (
         <OnboardingModal
           onStartCalibration={() => {

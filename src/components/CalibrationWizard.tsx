@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { CalibrationProfile, KeySignature, DiagnosticEvent, ALL_NUMPAD_KEYS } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { CalibrationProfile, KeySignature, ALL_NUMPAD_KEYS, domEventToNumpadKeyId } from '../types';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { 
-  Crosshair, 
+  Keyboard, 
   Check, 
   RotateCcw, 
   SkipForward, 
   X, 
   CheckCircle2, 
-  AlertTriangle
+  AlertTriangle 
 } from 'lucide-react';
 
 interface CalibrationWizardProps {
@@ -23,22 +23,22 @@ interface CalibrationWizardProps {
 
 const KEY_LABELS: Record<string, string> = {
   numpad_numlock: 'NumLock',
-  numpad_divide: 'Numpad / (Divide)',
-  numpad_multiply: 'Numpad * (Multiply)',
-  numpad_subtract: 'Numpad - (Subtract)',
-  numpad_7: 'Numpad 7 (or Home)',
-  numpad_8: 'Numpad 8 (or Up Arrow)',
-  numpad_9: 'Numpad 9 (or PgUp)',
-  numpad_add: 'Numpad + (Add)',
-  numpad_4: 'Numpad 4 (or Left Arrow)',
-  numpad_5: 'Numpad 5 (or Clear)',
-  numpad_6: 'Numpad 6 (or Right Arrow)',
-  numpad_1: 'Numpad 1 (or End)',
-  numpad_2: 'Numpad 2 (or Down Arrow)',
-  numpad_3: 'Numpad 3 (or PgDn)',
-  numpad_enter: 'Numpad Enter (Bottom Right)',
-  numpad_0: 'Numpad 0 (or Insert)',
-  numpad_decimal: 'Numpad . (Decimal or Del)',
+  numpad_divide: 'Divide ( / )',
+  numpad_multiply: 'Multiply ( * )',
+  numpad_subtract: 'Subtract ( - )',
+  numpad_7: '7 (Home)',
+  numpad_8: '8 (Up Arrow)',
+  numpad_9: '9 (Page Up)',
+  numpad_add: 'Add ( + )',
+  numpad_4: '4 (Left Arrow)',
+  numpad_5: '5 (Clear)',
+  numpad_6: '6 (Right Arrow)',
+  numpad_1: '1 (End)',
+  numpad_2: '2 (Down Arrow)',
+  numpad_3: '3 (Page Down)',
+  numpad_enter: 'Numpad Enter',
+  numpad_0: '0 (Insert)',
+  numpad_decimal: 'Decimal ( . )',
 };
 
 export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
@@ -58,109 +58,133 @@ export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
   const [isTestMode, setIsTestMode] = useState(false);
   const [testedKeys, setTestedKeys] = useState<Record<string, boolean>>({});
 
+  // Use refs to access latest values in persistent event handlers
+  const stepIndexRef = useRef(currentStepIndex);
+  stepIndexRef.current = currentStepIndex;
+
+  const signaturesRef = useRef(capturedSignatures);
+  signaturesRef.current = capturedSignatures;
+
+  const isTestModeRef = useRef(isTestMode);
+  isTestModeRef.current = isTestMode;
+
+  const initialModeRef = useRef(isDeckMode ? 'Deck' : 'Normal');
+
   const targetKeyId = ALL_NUMPAD_KEYS[currentStepIndex];
   const targetKeyName = KEY_LABELS[targetKeyId] || targetKeyId;
 
-  // Switch engine to Calibrating mode while wizard is open; restore previous mode on unmount
+  // 1. Enter Calibrating mode once on mount; cleanly restore previous mode on unmount
   useEffect(() => {
     invoke('set_engine_mode', { mode: 'Calibrating' }).catch(console.error);
 
     return () => {
-      const restoreMode = isDeckMode ? 'Deck' : 'Normal';
-      invoke('set_engine_mode', { mode: restoreMode }).catch(console.error);
+      invoke('set_engine_mode', { mode: initialModeRef.current }).catch(console.error);
     };
-  }, [isDeckMode]);
+  }, []);
 
-  // Listen for captured key events from the backend hook
+  // Common handler for both Native Hook and DOM events
+  const handleKeyCaptured = (sig: KeySignature) => {
+    if (isTestModeRef.current) {
+      const matched = Object.entries(signaturesRef.current).find(([, sigs]) =>
+        sigs.some((s) => s.scan_code === sig.scan_code && s.is_extended === sig.is_extended)
+      );
+      if (matched) {
+        setTestedKeys((prev) => ({ ...prev, [matched[0]]: true }));
+      }
+      return;
+    }
+
+    // Defensive check: reject system keys
+    if (sig.vk_code === 0x5b || sig.vk_code === 0x5c) {
+      setValidationWarning('Windows key detected. Please press the physical numeric keypad key.');
+      setPendingSignature(null);
+      return;
+    }
+    if (sig.vk_code === 0x1b) {
+      setValidationWarning('Escape key detected. Press Cancel or press a key on your numeric keypad.');
+      setPendingSignature(null);
+      return;
+    }
+    if (sig.vk_code === 0x09) {
+      return; // Ignore Tab navigation
+    }
+    if (sig.vk_code === 0xc0) {
+      setValidationWarning('Tilde (~) key detected. Please press a key on your numeric keypad.');
+      setPendingSignature(null);
+      return;
+    }
+    if (sig.scan_code < 0x47 && sig.vk_code >= 0x30 && sig.vk_code <= 0x39) {
+      setValidationWarning(`Top-row number '${String.fromCharCode(sig.vk_code)}' detected. Please press the physical numpad key.`);
+      setPendingSignature(null);
+      return;
+    }
+
+    const currentTarget = ALL_NUMPAD_KEYS[stepIndexRef.current];
+    let warning: string | null = null;
+
+    if (currentTarget === 'numpad_enter' && !sig.is_extended && sig.scan_code === 0x1c) {
+      warning = 'Main keyboard Enter detected. Please press the numeric keypad Enter in the bottom right.';
+    }
+
+    setValidationWarning(warning);
+    setPendingSignature(sig);
+  };
+
+  // 2. Persistent event listener registration (registered ONCE on mount)
   useEffect(() => {
     let unlistenCapture: (() => void) | undefined;
-    let unlistenDiag: (() => void) | undefined;
 
-    const setupListeners = async () => {
-      unlistenCapture = await listen<KeySignature>('calibration-key-captured', (event) => {
-        const sig = event.payload;
-
-        if (isTestMode) {
-          // In test mode: check which key was pressed
-          const matched = Object.entries(capturedSignatures).find(([, sigs]) =>
-            sigs.some((s) => s.scan_code === sig.scan_code && s.is_extended === sig.is_extended)
-          );
-          if (matched) {
-            setTestedKeys((prev) => ({ ...prev, [matched[0]]: true }));
-          }
-          return;
-        }
-
-        // Validate candidate key: strictly reject system and main-keyboard keys
-        if (sig.vk_code === 0x5B || sig.vk_code === 0x5C) {
-          setValidationWarning('Invalid Key: Windows key detected. Please press the physical numeric keypad key.');
-          setPendingSignature(null);
-          return;
-        }
-
-        if (sig.vk_code === 0x1B) {
-          setValidationWarning('Invalid Key: Escape key detected. Please press the physical numeric keypad key.');
-          setPendingSignature(null);
-          return;
-        }
-
-        if (sig.vk_code === 0x09) {
-          setValidationWarning('Invalid Key: Tab key detected. Please press the physical numeric keypad key.');
-          setPendingSignature(null);
-          return;
-        }
-
-        if (sig.vk_code === 0xC0) {
-          setValidationWarning('Invalid Key: Tilde (~) key detected. Please press the physical numeric keypad key.');
-          setPendingSignature(null);
-          return;
-        }
-
-        if (sig.scan_code < 0x47 && sig.vk_code >= 0x30 && sig.vk_code <= 0x39) {
-          setValidationWarning(`Invalid Key: Top-row number '${String.fromCharCode(sig.vk_code)}' detected. Please press the physical numeric keypad key.`);
-          setPendingSignature(null);
-          return;
-        }
-
-        let warning: string | null = null;
-
-        // Check if user pressed main keyboard Enter instead of Numpad Enter
-        if (targetKeyId === 'numpad_enter' && !sig.is_extended && sig.scan_code === 0x1c) {
-          warning = 'Warning: This event matches Main Enter (Ext=0). Please press the numeric keypad Enter (Ext=1).';
-        }
-
-        // Check for duplicate assignment
-        const existingKey = Object.entries(capturedSignatures).find(
-          ([kId, sigs]) =>
-            kId !== targetKeyId &&
-            sigs.some((s) => s.scan_code === sig.scan_code && s.is_extended === sig.is_extended)
-        );
-
-        if (existingKey) {
-          warning = `Notice: This signature was already assigned to ${KEY_LABELS[existingKey[0]] || existingKey[0]}. Re-assigning will overwrite it.`;
-        }
-
-        setValidationWarning(warning);
-        setPendingSignature(sig);
-      });
-
-      unlistenDiag = await listen<DiagnosticEvent>('diagnostic-key-event', () => {});
+    const setup = async () => {
+      try {
+        unlistenCapture = await listen<KeySignature>('calibration-key-captured', (event) => {
+          handleKeyCaptured(event.payload);
+        });
+      } catch (err) {
+        console.warn('Backend event listen unavailable, falling back to DOM events:', err);
+      }
     };
 
-    setupListeners();
+    setup();
+
+    // DOM KeyDown backup interceptor for focused calibration
+    const handleDomKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') return;
+      if (e.key === 'Escape') {
+        onCancel();
+        return;
+      }
+
+      const keyId = domEventToNumpadKeyId(e);
+      if (keyId || e.location === 3 || e.code.startsWith('Numpad')) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Synthesize KeySignature from DOM event
+        const vk = e.keyCode || e.which;
+        const isExt = e.location === 3 && (e.code === 'NumpadEnter' || e.code === 'NumpadDivide');
+        const defaultScan = getDefaultScanCode(keyId || e.code);
+
+        handleKeyCaptured({
+          vk_code: vk,
+          scan_code: defaultScan,
+          is_extended: isExt,
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleDomKeyDown, { capture: true });
 
     return () => {
       if (unlistenCapture) unlistenCapture();
-      if (unlistenDiag) unlistenDiag();
+      window.removeEventListener('keydown', handleDomKeyDown, { capture: true });
     };
-  }, [currentStepIndex, targetKeyId, capturedSignatures, isTestMode]);
+  }, []);
 
   const confirmPendingKey = () => {
     if (!pendingSignature) return;
 
     setCapturedSignatures((prev) => {
       const existing = prev[targetKeyId] || [];
-      // Avoid duplicate signature entries in the same key
       const filtered = existing.filter(
         (s) => s.scan_code !== pendingSignature.scan_code || s.is_extended !== pendingSignature.is_extended
       );
@@ -173,7 +197,6 @@ export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
     setPendingSignature(null);
     setValidationWarning(null);
 
-    // Advance to next key
     if (currentStepIndex < ALL_NUMPAD_KEYS.length - 1) {
       setCurrentStepIndex((prev) => prev + 1);
     } else {
@@ -206,51 +229,50 @@ export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-[#08090C]/80 backdrop-blur-md flex items-center justify-center p-6 z-50 select-none">
-      <div className="w-full max-w-2xl bg-[#0D0F14] border border-[#252C39] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Modal Header */}
-        <div className="p-6 border-b border-[#252C39] flex items-center justify-between bg-[#12151C]/60">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#397BFF]/15 border border-[#397BFF]/40 flex items-center justify-center text-[#397BFF]">
-              <Crosshair size={20} />
+    <div className="fixed inset-0 bg-[#08090C]/80 flex items-center justify-center p-4 z-50 select-none">
+      <div className="bg-[#0E1118] border border-[#1F2532] rounded-2xl w-full max-w-lg flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-[#1F2532] flex items-center justify-between bg-[#111520]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#182030] border border-[#2B3A54] flex items-center justify-center text-[#3B82F6]">
+              <Keyboard size={16} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[#F4F6FA]">Hardware Keypad Calibration</h2>
-              <p className="text-xs text-[#929CAC]">
-                Capture actual physical keyboard signatures to distinguish numpad from main keys
-              </p>
+              <h2 className="text-sm font-bold text-[#F1F5F9]">Keypad Calibration</h2>
+              <span className="text-[11px] text-[#64748B]">Optional setup for specialized hardware</span>
             </div>
           </div>
           <button
             onClick={onCancel}
-            className="p-1.5 rounded-lg text-[#626D7E] hover:text-[#F4F6FA] hover:bg-[#191E28] transition-all"
+            className="text-[#64748B] hover:text-[#F1F5F9] p-1.5 rounded-lg hover:bg-[#182030] cursor-pointer"
+            title="Cancel calibration"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        {/* Progress bar */}
-        <div className="h-1 bg-[#12151C] w-full">
+        {/* Progress Bar */}
+        <div className="h-1 bg-[#1A1F2B] w-full">
           <div
-            className="h-full bg-[#397BFF] transition-all duration-300"
+            className="h-full bg-[#3B82F6]"
             style={{ width: `${((currentStepIndex + 1) / ALL_NUMPAD_KEYS.length) * 100}%` }}
           />
         </div>
 
         {/* Modal Body */}
-        <div className="p-8 flex-1 overflow-y-auto space-y-6">
+        <div className="p-6 flex-1 space-y-5">
           {!isTestMode ? (
             <>
               {/* Step instructions */}
-              <div className="text-center space-y-2">
-                <span className="text-xs font-mono font-semibold uppercase text-[#397BFF]">
+              <div className="text-center space-y-1.5">
+                <span className="text-[11px] font-semibold text-[#397BFF] uppercase tracking-wider">
                   Step {currentStepIndex + 1} of {ALL_NUMPAD_KEYS.length}
                 </span>
-                <h3 className="text-2xl font-black text-[#F4F6FA] tracking-tight">
+                <h3 className="text-xl font-bold text-[#F4F6FA]">
                   Press <span className="text-[#397BFF]">{targetKeyName}</span>
                 </h3>
-                <p className="text-xs text-[#929CAC] max-w-md mx-auto">
-                  Press the indicated physical key on your numeric keypad. Current NumLock status:{' '}
+                <p className="text-xs text-[#929CAC]">
+                  Press the matching key on your physical keypad. NumLock is currently{' '}
                   <strong className={numLockOn ? 'text-[#65C991]' : 'text-[#E9B86A]'}>
                     {numLockOn ? 'ON' : 'OFF'}
                   </strong>.
@@ -259,107 +281,81 @@ export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
 
               {/* Waiting or Captured Card */}
               {pendingSignature ? (
-                <div className="p-5 rounded-2xl bg-[#12151C] border border-[#397BFF]/50 shadow-inner space-y-4">
+                <div className="p-5 rounded-xl bg-[#191E28] border border-[#397BFF]/60 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-[#65C991] flex items-center gap-1.5">
-                      <CheckCircle2 size={14} /> Keystroke Captured!
+                    <span className="text-xs font-bold text-[#65C991] flex items-center gap-1.5">
+                      <CheckCircle2 size={16} /> Key Detected Successfully
                     </span>
-                    <span className="text-[11px] font-mono text-[#929CAC]">
-                      Timestamp: {Date.now().toString().slice(-6)}
-                    </span>
+                    <span className="text-[11px] text-[#929CAC]">Ready to confirm</span>
                   </div>
 
-                  {/* Hardware data chips */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3 rounded-lg bg-[#08090C] border border-[#252C39]">
-                      <span className="text-[10px] text-[#626D7E] block uppercase font-mono">Scan Code</span>
-                      <span className="text-sm font-mono font-bold text-[#F4F6FA]">
-                        0x{pendingSignature.scan_code.toString(16).toUpperCase()} ({pendingSignature.scan_code})
-                      </span>
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-[#08090C] border border-[#252C39]">
-                      <span className="text-[10px] text-[#626D7E] block uppercase font-mono">Extended Key</span>
-                      <span className="text-sm font-mono font-bold text-[#F4F6FA]">
-                        {pendingSignature.is_extended ? 'Yes (1)' : 'No (0)'}
-                      </span>
-                    </div>
-
-                    <div className="p-3 rounded-lg bg-[#08090C] border border-[#252C39]">
-                      <span className="text-[10px] text-[#626D7E] block uppercase font-mono">Virtual Key</span>
-                      <span className="text-sm font-mono font-bold text-[#F4F6FA]">
-                        0x{pendingSignature.vk_code.toString(16).toUpperCase()} ({pendingSignature.vk_code})
-                      </span>
-                    </div>
+                  <div className="p-3 rounded-lg bg-[#0D0F14] border border-[#252C39] flex items-center justify-between text-xs">
+                    <span className="text-[#929CAC]">Target Key:</span>
+                    <span className="font-semibold text-[#F4F6FA]">{targetKeyName}</span>
                   </div>
 
-                  {/* Warning banner if questionable */}
                   {validationWarning && (
                     <div className="p-3 rounded-lg bg-[#E9B86A]/10 border border-[#E9B86A]/40 text-[#E9B86A] text-xs flex items-start gap-2">
-                      <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                      <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                       <span>{validationWarning}</span>
                     </div>
                   )}
 
-                  {/* Confirmation actions */}
-                  <div className="flex items-center gap-3 pt-2">
+                  <div className="flex items-center gap-2 pt-1">
                     <button
                       onClick={confirmPendingKey}
-                      className="flex-1 py-2.5 px-4 rounded-xl bg-[#397BFF] hover:bg-[#5B91FF] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+                      className="flex-1 py-2 px-3 rounded-lg bg-[#397BFF] hover:bg-[#5B91FF] text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <Check size={16} />
+                      <Check size={14} />
                       <span>Confirm & Next Key</span>
                     </button>
                     <button
                       onClick={handleRetry}
-                      className="py-2.5 px-4 rounded-xl bg-[#191E28] hover:bg-[#252C39] border border-[#252C39] text-[#F4F6FA] text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      className="py-2 px-3 rounded-lg bg-[#12151C] hover:bg-[#252C39] border border-[#252C39] text-[#929CAC] hover:text-[#F4F6FA] text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
                     >
-                      <RotateCcw size={14} />
-                      <span>Recapture</span>
+                      <RotateCcw size={13} />
+                      <span>Retry</span>
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="p-8 rounded-2xl bg-[#12151C] border border-dashed border-[#252C39] flex flex-col items-center justify-center text-center space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-[#191E28] flex items-center justify-center text-[#397BFF] animate-pulse">
-                    <Crosshair size={24} />
+                <div className="p-8 rounded-xl bg-[#0D0F14] border border-[#252C39] flex flex-col items-center justify-center text-center space-y-3">
+                  <div className="w-10 h-10 rounded-full bg-[#191E28] border border-[#252C39] flex items-center justify-center text-[#397BFF]">
+                    <Keyboard size={20} />
                   </div>
                   <div>
-                    <span className="text-sm font-bold text-[#F4F6FA] block">Listening for physical keypress...</span>
-                    <span className="text-xs text-[#626D7E]">Press the physical numpad key now</span>
+                    <span className="text-sm font-semibold text-[#F4F6FA] block">Waiting for physical key...</span>
+                    <span className="text-xs text-[#626D7E]">Press {targetKeyName} on your numpad</span>
                   </div>
-                  <div className="flex items-center gap-3 pt-2">
-                    <button
-                      onClick={handleSkip}
-                      className="py-1.5 px-3 rounded-lg text-xs text-[#929CAC] hover:text-[#F4F6FA] bg-[#191E28] hover:bg-[#252C39] border border-[#252C39] flex items-center gap-1.5 transition-all"
-                    >
-                      <SkipForward size={13} />
-                      <span>Skip this key</span>
-                    </button>
-                  </div>
+                  <button
+                    onClick={handleSkip}
+                    className="py-1.5 px-3 rounded-lg text-xs text-[#929CAC] hover:text-[#F4F6FA] bg-[#191E28] hover:bg-[#252C39] border border-[#252C39] flex items-center gap-1.5 cursor-pointer mt-1"
+                  >
+                    <SkipForward size={13} />
+                    <span>Skip this key</span>
+                  </button>
                 </div>
               )}
             </>
           ) : (
-            /* Calibration Verification Playground */
+            /* Test verification screen */
             <div className="space-y-4">
               <div className="text-center space-y-1">
-                <span className="text-xs font-semibold uppercase text-[#65C991] flex items-center justify-center gap-1.5">
-                  <CheckCircle2 size={16} /> Calibration Recorded
+                <span className="text-xs font-bold text-[#65C991] flex items-center justify-center gap-1">
+                  <CheckCircle2 size={15} /> All Keys Recorded
                 </span>
-                <h3 className="text-lg font-bold text-[#F4F6FA]">Test Calibration Playground</h3>
+                <h3 className="text-base font-bold text-[#F4F6FA]">Verify Keypad Detection</h3>
                 <p className="text-xs text-[#929CAC]">
-                  Press your physical numpad keys below. Keys that illuminate green are successfully recognized!
+                  Press your numpad keys to confirm recognition. Recognized keys illuminate in green.
                 </p>
               </div>
 
-              {/* Mini keypad test visualizer */}
-              <div className="p-6 rounded-2xl bg-[#12151C] border border-[#252C39] flex justify-center">
+              <div className="p-4 rounded-xl bg-[#0D0F14] border border-[#252C39] flex justify-center">
                 <div
-                  className="grid gap-2"
+                  className="grid gap-1.5"
                   style={{
-                    gridTemplateColumns: 'repeat(4, 56px)',
-                    gridTemplateRows: 'repeat(5, 52px)',
+                    gridTemplateColumns: 'repeat(4, 52px)',
+                    gridTemplateRows: 'repeat(5, 48px)',
                   }}
                 >
                   {ALL_NUMPAD_KEYS.map((kId: string) => {
@@ -368,13 +364,13 @@ export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
                     return (
                       <div
                         key={kId}
-                        className={`rounded-lg border flex flex-col items-center justify-center text-center p-1 transition-all ${
+                        className={`rounded-lg border flex flex-col items-center justify-center text-center p-1 ${
                           isTested
-                            ? 'bg-[#65C991]/20 border-[#65C991] text-[#65C991] shadow-[0_0_10px_#65C991]'
+                            ? 'bg-[#65C991]/20 border-[#65C991] text-[#65C991]'
                             : 'bg-[#191E28] border-[#252C39] text-[#929CAC]'
                         }`}
                       >
-                        <span className="text-[10px] font-mono font-bold truncate max-w-full">{label}</span>
+                        <span className="text-[10px] font-semibold truncate max-w-full">{label}</span>
                         {isTested && <Check size={10} className="mt-0.5" />}
                       </div>
                     );
@@ -382,45 +378,44 @@ export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-xs text-[#929CAC] px-2">
+              <div className="flex items-center justify-between text-xs text-[#929CAC] pt-1">
                 <span>Recognized {Object.keys(testedKeys).length} of {ALL_NUMPAD_KEYS.length} keys</span>
                 <button
                   onClick={() => {
                     setCurrentStepIndex(0);
                     setIsTestMode(false);
                   }}
-                  className="text-[#397BFF] hover:underline"
+                  className="text-[#397BFF] hover:underline cursor-pointer"
                 >
-                  Restart Calibration Wizard
+                  Recalibrate from Start
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Modal Footer */}
-        <div className="p-6 border-t border-[#252C39] flex items-center justify-between bg-[#12151C]/60">
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-[#1F2532] flex items-center justify-between bg-[#111520]">
           <button
             onClick={onResetDefaults}
-            className="py-2 px-3 rounded-lg text-xs font-semibold text-[#929CAC] hover:text-[#ED7777] bg-[#191E28] hover:bg-[#252C39] border border-[#252C39] transition-all"
-            title="Reset calibration to standard PC hardware defaults"
+            className="py-1.5 px-3 rounded-lg text-xs font-semibold text-[#94A3B8] hover:text-[#EF4444] bg-[#181E2C] hover:bg-[#2F1D20] border border-[#202736] hover:border-[#EF4444]/40 cursor-pointer"
           >
-            Reset to Standard Defaults
+            Reset to Defaults
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={onCancel}
-              className="py-2 px-4 rounded-lg text-xs font-semibold text-[#929CAC] hover:text-[#F4F6FA] bg-transparent transition-all"
+              className="py-1.5 px-3 rounded-lg text-xs font-semibold text-[#94A3B8] hover:text-[#F1F5F9] cursor-pointer"
             >
               Cancel
             </button>
             <button
               onClick={handleSaveAll}
-              className="py-2 px-5 rounded-lg text-xs font-bold text-white bg-[#397BFF] hover:bg-[#5B91FF] shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+              className="py-1.5 px-4 rounded-lg text-xs font-bold text-white bg-[#1D4ED8] hover:bg-[#2563EB] border border-[#3B82F6] flex items-center gap-1.5 cursor-pointer"
             >
               <Check size={14} />
-              <span>Apply & Finish</span>
+              <span>Save Calibration</span>
             </button>
           </div>
         </div>
@@ -428,3 +423,26 @@ export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
     </div>
   );
 };
+
+function getDefaultScanCode(keyId: string): number {
+  switch (keyId) {
+    case 'numpad_numlock': return 0x45;
+    case 'numpad_divide': return 0x35;
+    case 'numpad_multiply': return 0x37;
+    case 'numpad_subtract': return 0x4A;
+    case 'numpad_7': return 0x47;
+    case 'numpad_8': return 0x48;
+    case 'numpad_9': return 0x49;
+    case 'numpad_add': return 0x4E;
+    case 'numpad_4': return 0x4B;
+    case 'numpad_5': return 0x4C;
+    case 'numpad_6': return 0x4D;
+    case 'numpad_1': return 0x4F;
+    case 'numpad_2': return 0x50;
+    case 'numpad_3': return 0x51;
+    case 'numpad_enter': return 0x1C;
+    case 'numpad_0': return 0x52;
+    case 'numpad_decimal': return 0x53;
+    default: return 0x47;
+  }
+}

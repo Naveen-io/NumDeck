@@ -4,17 +4,16 @@ import {
   ChevronDown, 
   Folder, 
   ArrowLeft, 
-  ToggleLeft, 
-  ToggleRight,
-  ShieldCheck,
+  Power,
   CheckCircle2,
-  AlertCircle
+  SlidersHorizontal
 } from 'lucide-react';
 
 interface TopBarProps {
   profiles: Profile[];
   activeProfileId: string;
   onSelectProfile: (id: string) => void;
+  onManageProfiles?: () => void;
   activeFolderId?: string;
   onNavigateBack: () => void;
   isDeckMode: boolean;
@@ -28,6 +27,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   profiles,
   activeProfileId,
   onSelectProfile,
+  onManageProfiles,
   activeFolderId,
   onNavigateBack,
   isDeckMode,
@@ -42,9 +42,9 @@ export const TopBar: React.FC<TopBarProps> = ({
     : undefined;
 
   return (
-    <header className="h-14 border-b border-[#252C39] bg-[#0D0F14]/90 backdrop-blur-md px-6 flex items-center justify-between shrink-0 select-none">
+    <header className="h-14 border-b border-[#1F2532] bg-[#0B0D12] px-6 flex items-center justify-between shrink-0 select-none">
       {/* Profile & Navigation Breadcrumb */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {/* Profile Dropdown */}
         <div className="relative flex items-center">
           <select
@@ -54,47 +54,61 @@ export const TopBar: React.FC<TopBarProps> = ({
               onSelectProfile(e.target.value);
               e.target.blur();
             }}
-            className="appearance-none bg-[#12151C] hover:bg-[#191E28] border border-[#252C39] rounded-lg pl-3 pr-8 py-1.5 text-xs font-semibold text-[#F4F6FA] cursor-pointer focus:outline-none focus:border-[#397BFF] transition-all"
+            className="appearance-none bg-[#131722] hover:bg-[#181E2C] border border-[#202736] rounded-lg pl-3 pr-8 py-1.5 text-xs font-semibold text-[#F1F5F9] cursor-pointer focus:outline-none focus:border-[#3B82F6]"
           >
             {profiles.map((p) => (
-              <option key={p.id} value={p.id} className="bg-[#12151C] text-[#F4F6FA]">
+              <option key={p.id} value={p.id} className="bg-[#131722] text-[#F1F5F9]">
                 Profile: {p.name}
               </option>
             ))}
           </select>
-          <ChevronDown size={14} className="absolute right-2.5 text-[#929CAC] pointer-events-none" />
+          <ChevronDown size={14} className="absolute right-2.5 text-[#64748B] pointer-events-none" />
         </div>
+
+        {onManageProfiles && (
+          <button
+            tabIndex={-1}
+            onClick={(e) => {
+              onManageProfiles();
+              e.currentTarget.blur();
+            }}
+            className="p-1.5 rounded-lg bg-[#131722] hover:bg-[#181E2C] border border-[#202736] text-[#94A3B8] hover:text-[#F1F5F9] cursor-pointer"
+            title="Manage Profiles"
+          >
+            <SlidersHorizontal size={14} />
+          </button>
+        )}
 
         {/* Sub-Deck Folder Breadcrumb */}
         {currentFolder && (
-          <div className="flex items-center gap-2 text-xs text-[#929CAC]">
-            <span className="text-[#626D7E]">/</span>
+          <div className="flex items-center gap-2 text-xs text-[#94A3B8]">
+            <span className="text-[#475569]">/</span>
             <button
               onClick={onNavigateBack}
-              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#191E28] hover:bg-[#252C39] text-[#F4F6FA] rounded-md border border-[#252C39] transition-all cursor-pointer font-semibold"
+              className="flex items-center gap-1.5 px-2.5 py-1 bg-[#131722] hover:bg-[#181E2C] text-[#F1F5F9] rounded-md border border-[#202736] cursor-pointer font-semibold"
             >
               <ArrowLeft size={13} />
-              <Folder size={13} className="text-[#397BFF]" />
+              <Folder size={13} className="text-[#3B82F6]" />
               <span>{currentFolder.name}</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* Hardware Telemetry & Mode Switch */}
+      {/* Hardware Status & Controls */}
       <div className="flex items-center gap-3">
         {/* Physical NumLock State */}
         <div 
-          className="flex items-center gap-2 px-2.5 py-1 rounded-md text-[11px] font-mono border bg-[#12151C] border-[#252C39]"
-          title={numLockOn ? "Hardware NumLock is enabled" : "Hardware NumLock is disabled (navigation mode active)"}
+          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium border bg-[#131722] border-[#202736]"
+          title={numLockOn ? "Hardware NumLock is ON" : "Hardware NumLock is OFF"}
         >
           <span
             className={`w-2 h-2 rounded-full ${
-              numLockOn ? 'bg-[#65C991] shadow-[0_0_8px_#65C991]' : 'bg-[#E9B86A]'
+              numLockOn ? 'bg-[#10B981]' : 'bg-[#F59E0B]'
             }`}
           />
-          <span className="text-[#929CAC]">
-            NUMLOCK: <strong className={numLockOn ? 'text-[#65C991]' : 'text-[#E9B86A]'}>{numLockOn ? 'ON' : 'OFF'}</strong>
+          <span className="text-[#64748B] font-semibold text-[11px]">
+            NumLock: <strong className={numLockOn ? 'text-[#10B981]' : 'text-[#F59E0B]'}>{numLockOn ? 'ON' : 'OFF'}</strong>
           </span>
         </div>
 
@@ -105,29 +119,12 @@ export const TopBar: React.FC<TopBarProps> = ({
             onOpenCalibration();
             e.currentTarget.blur();
           }}
-          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all cursor-pointer ${
-            isCalibrated
-              ? 'bg-[#12151C] text-[#929CAC] border-[#252C39] hover:border-[#397BFF]/60 hover:text-[#F4F6FA]'
-              : 'bg-[#E9B86A]/10 text-[#E9B86A] border-[#E9B86A]/40 hover:bg-[#E9B86A]/20'
-          }`}
-          title="Click to recalibrate or verify physical keypad signatures"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border bg-[#131722] text-[#94A3B8] hover:text-[#F1F5F9] border-[#202736] hover:border-[#2E3A50] cursor-pointer"
+          title="Recalibrate or verify hardware numpad"
         >
-          {isCalibrated ? (
-            <CheckCircle2 size={13} className="text-[#65C991]" />
-          ) : (
-            <AlertCircle size={13} className="text-[#E9B86A]" />
-          )}
-          <span>{isCalibrated ? 'Hardware Calibrated' : 'Calibration Needed'}</span>
+          <CheckCircle2 size={13} className={isCalibrated ? 'text-[#10B981]' : 'text-[#F59E0B]'} />
+          <span>{isCalibrated ? 'Calibrated' : 'Calibrate'}</span>
         </button>
-
-        {/* Emergency Protection Indicator */}
-        <div 
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#12151C] text-[#626D7E] border border-[#252C39]"
-          title="Hardware Fail-Safe Active: Tap ESC 3 times to disarm immediately"
-        >
-          <ShieldCheck size={13} className="text-[#65C991]" />
-          <span className="font-mono">Fail-Safe Ready</span>
-        </div>
 
         {/* Deck Mode Toggle Button */}
         <button
@@ -136,18 +133,14 @@ export const TopBar: React.FC<TopBarProps> = ({
             onToggleDeckMode();
             e.currentTarget.blur();
           }}
-          className={`flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
             isDeckMode
-              ? 'bg-[#14264A] text-[#397BFF] border-[#397BFF]/70 shadow-[0_0_12px_rgba(57,123,255,0.25)]'
-              : 'bg-[#12151C] text-[#929CAC] border-[#252C39] hover:text-[#F4F6FA] hover:bg-[#191E28]'
+              ? 'bg-[#1D4ED8] hover:bg-[#2563EB] text-white border-[#3B82F6]'
+              : 'bg-[#131722] hover:bg-[#181E2C] text-[#CBD5E1] border-[#202736]'
           }`}
         >
-          <span>Deck Mode</span>
-          {isDeckMode ? (
-            <ToggleRight size={20} className="text-[#397BFF]" />
-          ) : (
-            <ToggleLeft size={20} className="text-[#626D7E]" />
-          )}
+          <Power size={13} strokeWidth={2.5} />
+          <span>{isDeckMode ? 'Deck Mode ON' : 'Deck Mode OFF'}</span>
         </button>
       </div>
     </header>

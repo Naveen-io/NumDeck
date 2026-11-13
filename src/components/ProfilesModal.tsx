@@ -35,7 +35,7 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
     const newId = `profile_${Date.now()}`;
     const newProfile: Profile = {
       id: newId,
-      name: `New Profile ${profileList.length + 1}`,
+      name: `Profile ${profileList.length + 1}`,
       icon: 'LayoutGrid',
       keys: {},
       folders: [],
@@ -88,29 +88,29 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-[#08090C]/80 backdrop-blur-md flex items-center justify-center p-6 z-50 select-none">
-      <div className="w-full max-w-lg bg-[#0D0F14] border border-[#252C39] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+    <div className="fixed inset-0 bg-[#08090C]/80 flex items-center justify-center p-6 z-50 select-none">
+      <div className="w-full max-w-lg bg-[#0E1118] border border-[#1F2532] rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="p-6 border-b border-[#252C39] flex items-center justify-between bg-[#12151C]/60">
+        <div className="p-5 border-b border-[#1F2532] flex items-center justify-between bg-[#111520]">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#397BFF]/15 border border-[#397BFF]/40 flex items-center justify-center text-[#397BFF]">
-              <Layers size={20} />
+            <div className="w-8 h-8 rounded-lg bg-[#182030] border border-[#2B3A54] flex items-center justify-center text-[#3B82F6]">
+              <Layers size={18} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[#F4F6FA]">Profile Management</h2>
-              <p className="text-xs text-[#929CAC]">Switch or customize action decks for gaming, coding, editing, and streaming</p>
+              <h2 className="text-sm font-bold text-[#F1F5F9]">Profiles</h2>
+              <p className="text-[11px] text-[#64748B]">Create and switch key layouts for your workflows</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[#626D7E] hover:text-[#F4F6FA] hover:bg-[#191E28] transition-all"
+            className="p-1.5 rounded-lg text-[#64748B] hover:text-[#F1F5F9] hover:bg-[#182030] cursor-pointer"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Profile list */}
-        <div className="p-6 flex-1 overflow-y-auto space-y-3">
+        <div className="p-5 flex-1 overflow-y-auto space-y-2.5">
           {profileList.map((p) => {
             const isActive = activeProfileId === p.id;
             const isEditing = editingId === p.id;
@@ -118,15 +118,15 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
             return (
               <div
                 key={p.id}
-                className={`p-3.5 rounded-xl border flex items-center justify-between transition-all ${
+                className={`p-3 rounded-xl border flex items-center justify-between ${
                   isActive
-                    ? 'bg-[#14264A]/70 border-[#397BFF]/60 shadow-sm'
-                    : 'bg-[#12151C] border-[#252C39] hover:bg-[#191E28]'
+                    ? 'bg-[#142036] border-[#3B82F6]'
+                    : 'bg-[#131722] border-[#202736] hover:bg-[#171D2B]'
                 }`}
               >
                 <div className="flex items-center gap-3 flex-1 mr-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#191E28] border border-[#252C39] flex items-center justify-center text-[#397BFF]">
-                    <IconRenderer name={p.icon || 'LayoutGrid'} size={16} />
+                  <div className="w-7 h-7 rounded-lg bg-[#182030] border border-[#2B3A54] flex items-center justify-center text-[#3B82F6]">
+                    <IconRenderer name={p.icon || 'LayoutGrid'} size={15} />
                   </div>
 
                   {isEditing ? (
@@ -135,12 +135,12 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
                         type="text"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
-                        className="px-2 py-1 bg-[#08090C] border border-[#397BFF] rounded text-xs text-[#F4F6FA] font-semibold flex-1 focus:outline-none"
+                        className="px-2 py-1 bg-[#0B0D12] border border-[#3B82F6] rounded text-xs text-[#F1F5F9] font-semibold flex-1 focus:outline-none"
                         autoFocus
                       />
                       <button
                         onClick={() => saveRename(p.id)}
-                        className="p-1 text-[#65C991] hover:bg-[#191E28] rounded"
+                        className="p-1 text-[#10B981] hover:bg-[#182030] rounded cursor-pointer"
                       >
                         <Check size={14} />
                       </button>
@@ -148,14 +148,14 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
                   ) : (
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-[#F4F6FA]">{p.name}</span>
+                        <span className="text-xs font-bold text-[#F1F5F9]">{p.name}</span>
                         {isActive && (
-                          <span className="text-[10px] font-semibold text-[#397BFF] bg-[#397BFF]/20 px-1.5 py-0.5 rounded border border-[#397BFF]/30">
-                            Active Deck
+                          <span className="text-[10px] font-semibold text-[#3B82F6] bg-[#3B82F6]/15 px-1.5 py-0.5 rounded border border-[#3B82F6]/30">
+                            Active
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] text-[#626D7E] font-mono">
+                      <span className="text-[11px] text-[#64748B]">
                         {Object.keys(p.keys || {}).length} keys mapped
                       </span>
                     </div>
@@ -167,41 +167,41 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
                   {!isActive && (
                     <button
                       onClick={() => onSelectProfile(p.id)}
-                      className="py-1 px-2.5 rounded-lg bg-[#397BFF]/15 hover:bg-[#397BFF]/30 text-[#397BFF] text-xs font-semibold transition-all"
+                      className="py-1 px-2.5 rounded-lg bg-[#182030] hover:bg-[#202B42] text-[#3B82F6] text-xs font-semibold border border-[#2B3A54] cursor-pointer"
                     >
-                      Activate
+                      Select
                     </button>
                   )}
 
                   <button
                     onClick={() => startRename(p)}
-                    className="p-1.5 rounded-lg text-[#929CAC] hover:text-[#F4F6FA] hover:bg-[#191E28] transition-all"
-                    title="Rename profile"
+                    className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#F1F5F9] hover:bg-[#182030] cursor-pointer"
+                    title="Rename"
                   >
                     <Edit2 size={13} />
                   </button>
 
                   <button
                     onClick={() => handleDuplicateProfile(p)}
-                    className="p-1.5 rounded-lg text-[#929CAC] hover:text-[#F4F6FA] hover:bg-[#191E28] transition-all"
-                    title="Duplicate profile"
+                    className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#F1F5F9] hover:bg-[#182030] cursor-pointer"
+                    title="Duplicate"
                   >
                     <Copy size={13} />
                   </button>
 
                   {profileList.length > 1 && (
                     confirmDeleteId === p.id ? (
-                      <div className="flex items-center gap-1 bg-[#ED7777]/20 border border-[#ED7777]/40 px-2 py-0.5 rounded-lg">
-                        <span className="text-[10px] text-[#ED7777] font-bold">Delete?</span>
+                      <div className="flex items-center gap-1 bg-[#EF4444]/15 border border-[#EF4444]/40 px-2 py-0.5 rounded-lg">
+                        <span className="text-[10px] text-[#EF4444] font-bold">Delete?</span>
                         <button
                           onClick={() => handleDeleteProfile(p.id)}
-                          className="text-[10px] font-bold text-white bg-[#ED7777] hover:bg-[#ED7777]/80 px-1.5 py-0.5 rounded"
+                          className="text-[10px] font-bold text-white bg-[#EF4444] px-1.5 py-0.5 rounded cursor-pointer"
                         >
                           Yes
                         </button>
                         <button
                           onClick={() => setConfirmDeleteId(null)}
-                          className="text-[10px] text-[#929CAC] hover:text-white px-1"
+                          className="text-[10px] text-[#94A3B8] px-1 cursor-pointer"
                         >
                           No
                         </button>
@@ -209,8 +209,8 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
                     ) : (
                       <button
                         onClick={() => setConfirmDeleteId(p.id)}
-                        className="p-1.5 rounded-lg text-[#626D7E] hover:text-[#ED7777] hover:bg-[#191E28] transition-all cursor-pointer"
-                        title="Delete profile"
+                        className="p-1.5 rounded-lg text-[#64748B] hover:text-[#EF4444] hover:bg-[#182030] cursor-pointer"
+                        title="Delete"
                       >
                         <Trash2 size={13} />
                       </button>
@@ -222,21 +222,21 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
           })}
         </div>
 
-        {/* Footer with Add New Profile */}
-        <div className="p-5 border-t border-[#252C39] bg-[#12151C]/60 flex items-center justify-between">
+        {/* Footer */}
+        <div className="p-4 border-t border-[#1F2532] bg-[#111520] flex items-center justify-between">
           <button
             onClick={handleCreateProfile}
-            className="py-2 px-3.5 rounded-xl bg-[#397BFF] hover:bg-[#5B91FF] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+            className="py-1.5 px-3.5 rounded-lg bg-[#1D4ED8] hover:bg-[#2563EB] text-white text-xs font-bold flex items-center gap-1.5 border border-[#3B82F6] cursor-pointer"
           >
             <Plus size={14} />
-            <span>Create New Profile</span>
+            <span>Create Profile</span>
           </button>
 
           <button
             onClick={onClose}
-            className="py-2 px-4 rounded-xl text-xs font-semibold text-[#929CAC] hover:text-[#F4F6FA] bg-[#191E28] hover:bg-[#252C39] border border-[#252C39] transition-all"
+            className="py-1.5 px-4 rounded-lg text-xs font-semibold text-[#94A3B8] hover:text-[#F1F5F9] bg-[#181E2C] hover:bg-[#222B3E] border border-[#202736] cursor-pointer"
           >
-            Close
+            Done
           </button>
         </div>
       </div>

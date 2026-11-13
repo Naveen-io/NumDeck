@@ -40,11 +40,13 @@ fn set_engine_mode(
 ) -> Result<(), String> {
     if let Some(engine) = context.engine.read().as_ref() {
         *engine.state().mode.write() = mode;
-        let is_deck = mode == EngineMode::Deck;
-        let _ = app.emit("deck-mode-changed", is_deck);
+        if mode != EngineMode::Calibrating {
+            let is_deck = mode == EngineMode::Deck;
+            let _ = app.emit("deck-mode-changed", is_deck);
+        }
         log::info!("Engine mode set to: {:?}", mode);
     }
-    {
+    if mode != EngineMode::Calibrating {
         let mut data = context.data.write();
         data.settings.deck_mode = mode == EngineMode::Deck;
         let _ = context.config_manager.save(&data);

@@ -216,25 +216,25 @@ export const ActionModal: React.FC<ActionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-[#08090C]/85 backdrop-blur-md flex items-center justify-center p-6 z-50 select-none animate-in fade-in duration-150">
-      <div className="w-full max-w-xl bg-[#0D0F14] border border-[#252C39] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 bg-[#08090C]/80 flex items-center justify-center p-6 z-50 select-none">
+      <div className="w-full max-w-xl bg-[#0E1118] border border-[#1F2532] rounded-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="p-5 border-b border-[#252C39] flex items-center justify-between bg-[#12151C]/60">
+        <div className="p-5 border-b border-[#1F2532] flex items-center justify-between bg-[#111520]">
           <div className="flex items-center gap-3">
             <div
-              className="w-10 h-10 rounded-xl bg-[#191E28] border border-[#252C39] flex items-center justify-center shadow-inner"
-              style={{ borderColor: `${color}50` }}
+              className="w-10 h-10 rounded-xl bg-[#182030] border border-[#2B3A54] flex items-center justify-center"
+              style={{ borderColor: `${color}80` }}
             >
               <IconRenderer name={icon} size={22} color={color} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[#F4F6FA]">Configure Key Action</h2>
-              <span className="text-xs text-[#929CAC] font-mono">Target Key: {keyId}</span>
+              <h2 className="text-sm font-bold text-[#F1F5F9]">Configure Key Action</h2>
+              <span className="text-xs text-[#64748B] font-mono">Key: {keyId}</span>
             </div>
           </div>
           <button
             onClick={onCancel}
-            className="p-1.5 rounded-lg text-[#626D7E] hover:text-[#F4F6FA] hover:bg-[#191E28] transition-all cursor-pointer"
+            className="p-1.5 rounded-lg text-[#64748B] hover:text-[#F1F5F9] hover:bg-[#182030] cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -562,28 +562,28 @@ export const ActionModal: React.FC<ActionModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-5 border-t border-[#252C39] flex items-center justify-between bg-[#12151C]/60">
+        <div className="p-4 border-t border-[#1F2532] flex items-center justify-between bg-[#111520]">
           <button
             type="button"
             onClick={handleTest}
-            className="py-2 px-3.5 rounded-lg text-xs font-bold text-[#397BFF] bg-[#397BFF]/10 hover:bg-[#397BFF]/20 border border-[#397BFF]/30 flex items-center gap-1.5 transition-all cursor-pointer"
+            className="py-2 px-3.5 rounded-lg text-xs font-bold text-[#3B82F6] bg-[#182030] hover:bg-[#202B42] border border-[#2B3A54] flex items-center gap-1.5 cursor-pointer"
           >
             <Play size={13} fill="currentColor" />
             <span>Test Action</span>
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onCancel}
-              className="py-2 px-4 rounded-lg text-xs font-semibold text-[#929CAC] hover:text-[#F4F6FA] transition-all cursor-pointer"
+              className="py-2 px-4 rounded-lg text-xs font-semibold text-[#94A3B8] hover:text-[#F1F5F9] cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={handleSave}
-              className="py-2 px-5 rounded-lg text-xs font-bold text-white bg-[#397BFF] hover:bg-[#5B91FF] shadow-md flex items-center gap-1.5 transition-all cursor-pointer"
+              className="py-2 px-5 rounded-lg text-xs font-bold text-white bg-[#1D4ED8] hover:bg-[#2563EB] border border-[#3B82F6] flex items-center gap-1.5 cursor-pointer"
             >
               <Check size={14} />
               <span>Save Action</span>

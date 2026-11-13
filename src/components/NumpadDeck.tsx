@@ -20,51 +20,49 @@ export const NumpadDeck: React.FC<NumpadDeckProps> = ({
   isDeckMode,
   profileName,
 }) => {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[#08090C] overflow-auto select-none relative">
-      {/* Outer Anodized Hardware Chassis */}
-      <div className="relative p-7 rounded-[28px] bg-[#0E1117] border border-[#252C39] shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col items-center max-w-full">
-        {/* Hardware Corner Screws / Accents */}
-        <div className="absolute top-3.5 left-3.5 w-2 h-2 rounded-full border border-[#252C39] bg-[#191E28] flex items-center justify-center">
-          <div className="w-1 h-0.5 bg-[#626D7E]" />
-        </div>
-        <div className="absolute top-3.5 right-3.5 w-2 h-2 rounded-full border border-[#252C39] bg-[#191E28] flex items-center justify-center">
-          <div className="w-1 h-0.5 bg-[#626D7E]" />
-        </div>
-        <div className="absolute bottom-3.5 left-3.5 w-2 h-2 rounded-full border border-[#252C39] bg-[#191E28] flex items-center justify-center">
-          <div className="w-1 h-0.5 bg-[#626D7E]" />
-        </div>
-        <div className="absolute bottom-3.5 right-3.5 w-2 h-2 rounded-full border border-[#252C39] bg-[#191E28] flex items-center justify-center">
-          <div className="w-1 h-0.5 bg-[#626D7E]" />
-        </div>
+  const configuredCount = Object.values(assignments).filter((a) => !!a.action).length;
 
-        {/* Chassis Top Plate Branding & Status Bar */}
-        <div className="w-full flex items-center justify-between pb-3.5 mb-4 border-b border-[#202735] px-1">
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#08090C] overflow-auto select-none">
+      {/* Deck Chassis */}
+      <div className="p-6 rounded-2xl bg-[#0D1017] border border-[#1F2532] flex flex-col items-center max-w-full">
+        {/* Chassis Header Bar */}
+        <div className="w-full flex items-center justify-between pb-3.5 mb-4 border-b border-[#1A202C] px-1">
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#161C26] border border-[#252C39]">
-              <span className={`w-2 h-2 rounded-full ${isDeckMode ? 'bg-[#397BFF] shadow-[0_0_8px_#397BFF]' : 'bg-[#626D7E]'}`} />
-              <span className="text-[10px] font-mono font-bold tracking-wider text-[#929CAC] uppercase">
-                {isDeckMode ? 'DECK ACTIVE' : 'NORMAL MODE'}
-              </span>
-            </div>
-            <span className="text-[11px] text-[#626D7E] font-medium">|</span>
-            <span className="text-[11px] text-[#929CAC] font-semibold tracking-wide">
-              Profile: <span className="text-[#F4F6FA] font-bold">{profileName}</span>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isDeckMode ? 'bg-[#3B82F6]' : 'bg-[#475569]'
+              }`}
+            />
+            <span className="text-xs font-bold text-[#F1F5F9]">
+              {profileName}
+            </span>
+            <span className="text-xs text-[#475569]">•</span>
+            <span className="text-xs text-[#94A3B8]">
+              {configuredCount} of 17 Keys Configured
             </span>
           </div>
 
-          <div className="flex items-center gap-2 text-[10px] text-[#626D7E] font-mono">
-            <span>17-KEY COMMAND MATRIX</span>
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                isDeckMode
+                  ? 'bg-[#3B82F6]/15 text-[#3B82F6] border-[#3B82F6]/30'
+                  : 'bg-[#161B26] text-[#64748B] border-[#222B3A]'
+              }`}
+            >
+              {isDeckMode ? 'Deck Mode Active' : 'Normal Mode'}
+            </span>
           </div>
         </div>
 
-        {/* Recessed Numpad Switch Plate */}
-        <div className="p-3.5 rounded-2xl bg-[#080A0E] border border-[#1B222E] shadow-inner">
+        {/* Numpad Switch Plate */}
+        <div className="p-3 rounded-xl bg-[#080A0E] border border-[#1A202C]">
           <div
             className="grid gap-2.5"
             style={{
-              gridTemplateColumns: 'repeat(4, 94px)',
-              gridTemplateRows: 'repeat(5, 86px)',
+              gridTemplateColumns: 'repeat(4, 92px)',
+              gridTemplateRows: 'repeat(5, 84px)',
             }}
           >
             {NUMPAD_KEYS_LAYOUT.map((keyDef) => {
@@ -88,33 +86,32 @@ export const NumpadDeck: React.FC<NumpadDeckProps> = ({
                     e.currentTarget.blur();
                   }}
                   style={style}
-                  className={`group relative flex flex-col items-center justify-between p-2.5 rounded-xl transition-all duration-100 cursor-pointer border select-none overflow-hidden text-left ${
-                    isSelected
-                      ? 'bg-gradient-to-b from-[#162544] to-[#0F1B33] border-[#397BFF] shadow-[0_0_16px_rgba(57,123,255,0.3)] ring-1 ring-[#397BFF]'
-                      : isTriggered
-                      ? 'translate-y-1 bg-[#397BFF] border-[#5B91FF] text-white shadow-none ring-2 ring-white/50'
+                  className={`group relative flex flex-col items-center justify-between p-2.5 rounded-lg cursor-pointer border select-none overflow-hidden text-left ${
+                    isTriggered
+                      ? 'bg-[#2563EB] border-[#3B82F6] text-white ring-2 ring-white/60'
+                      : isSelected
+                      ? 'bg-[#16233B] border-[#3B82F6] text-[#F1F5F9] ring-1 ring-[#3B82F6]'
                       : hasAction
-                      ? 'bg-gradient-to-b from-[#1C222E] to-[#12161F] hover:from-[#242C3B] hover:to-[#171C26] border-[#252C39] hover:border-[#397BFF]/50 shadow-[0_4px_8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)] active:translate-y-0.5'
-                      : 'bg-gradient-to-b from-[#141720] to-[#0D1016] hover:from-[#1A1F2B] hover:to-[#11141C] border-[#1E2532] hover:border-[#2B3547] text-[#626D7E] shadow-[0_3px_6px_rgba(0,0,0,0.4)] active:translate-y-0.5'
+                      ? 'bg-[#131722] hover:bg-[#181E2E] border-[#222B3B] hover:border-[#2E3A50] text-[#E2E8F0]'
+                      : 'bg-[#0E1118] hover:bg-[#141822] border-[#1A202C] hover:border-[#252E3E] text-[#64748B]'
                   }`}
                 >
-                  {/* Key Legend Inset (Top Row) */}
+                  {/* Top: Key Hardware Label & Status */}
                   <div className="w-full flex items-center justify-between pointer-events-none">
                     <span
-                      className={`text-[10px] font-mono font-bold tracking-wider uppercase transition-colors ${
-                        isSelected
-                          ? 'text-[#397BFF]'
-                          : isTriggered
+                      className={`text-[10px] font-mono font-bold uppercase ${
+                        isTriggered
                           ? 'text-white'
+                          : isSelected
+                          ? 'text-[#3B82F6]'
                           : hasAction
-                          ? 'text-[#929CAC]'
-                          : 'text-[#626D7E]'
+                          ? 'text-[#94A3B8]'
+                          : 'text-[#475569]'
                       }`}
                     >
                       {keyDef.defaultLabel}
                     </span>
 
-                    {/* Small category / color dot */}
                     {hasAction && assignment?.color && (
                       <span
                         className="w-1.5 h-1.5 rounded-full"
@@ -123,63 +120,41 @@ export const NumpadDeck: React.FC<NumpadDeckProps> = ({
                     )}
                   </div>
 
-                  {/* Key Center: Icon & Label */}
-                  {hasAction ? (
-                    <div className="flex flex-col items-center justify-center my-auto w-full px-1 text-center">
-                      <div
-                        className={`p-1.5 rounded-lg mb-1 flex items-center justify-center transition-transform group-hover:scale-105 ${
-                          isSelected
-                            ? 'bg-[#397BFF]/20 text-[#397BFF]'
-                            : isTriggered
-                            ? 'text-white'
-                            : 'bg-[#0E1117]/80 text-[#F4F6FA]'
-                        }`}
-                      >
-                        <IconRenderer
-                          name={assignment.icon}
-                          size={keyDef.rowSpan ? 26 : 20}
-                          color={isTriggered ? '#FFFFFF' : assignment.color}
-                        />
+                  {/* Center: Action Icon or Empty Add Cue */}
+                  <div className="flex-1 flex items-center justify-center pointer-events-none my-1">
+                    {hasAction ? (
+                      <IconRenderer
+                        name={assignment.icon}
+                        size={keyDef.rowSpan && keyDef.rowSpan > 1 ? 26 : 22}
+                        color={isTriggered ? '#FFFFFF' : assignment.color}
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded flex items-center justify-center text-[#334155] group-hover:text-[#64748B]">
+                        <Plus size={14} strokeWidth={2.5} />
                       </div>
-                      <span
-                        className={`text-[11px] font-bold tracking-tight truncate max-w-full leading-tight ${
-                          isSelected
-                            ? 'text-[#F4F6FA]'
-                            : isTriggered
-                            ? 'text-white'
-                            : 'text-[#F4F6FA]'
-                        }`}
-                        title={assignment.label}
-                      >
-                        {assignment.label}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center my-auto text-[#626D7E] group-hover:text-[#929CAC] transition-colors">
-                      <Plus size={16} className="opacity-30 group-hover:opacity-70 mb-0.5 transition-opacity" />
-                      <span className="text-[10px] font-medium tracking-tight">Assign</span>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
-                  {/* Keycap Bottom Accent Line */}
-                  {hasAction && (
-                    <div
-                      className="w-8 h-[3px] rounded-full mx-auto mt-auto opacity-70 group-hover:opacity-100 transition-opacity"
-                      style={{
-                        backgroundColor: assignment.color || '#397BFF',
-                      }}
-                    />
-                  )}
+                  {/* Bottom: Readable Action Label */}
+                  <div className="w-full text-center pointer-events-none truncate">
+                    <span
+                      className={`text-[10px] font-medium truncate block ${
+                        isTriggered
+                          ? 'text-white'
+                          : isSelected
+                          ? 'text-[#E2E8F0] font-semibold'
+                          : hasAction
+                          ? 'text-[#CBD5E1]'
+                          : 'text-[#334155] group-hover:text-[#64748B]'
+                      }`}
+                    >
+                      {hasAction ? assignment.label : 'Empty'}
+                    </span>
+                  </div>
                 </button>
               );
             })}
           </div>
-        </div>
-
-        {/* Chassis Bottom Micro Status */}
-        <div className="w-full flex items-center justify-between pt-3 mt-3 px-2 text-[10px] text-[#626D7E] font-mono">
-          <span>SUPPRESSION: {isDeckMode ? 'ENABLED (RETURN 1)' : 'PASS-THROUGH (CallNextHookEx)'}</span>
-          <span>DISARM: ESC 3X</span>
         </div>
       </div>
     </div>

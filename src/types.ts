@@ -1,5 +1,7 @@
 export type EngineMode = 'Normal' | 'Deck' | 'Calibrating';
 
+export type NavTab = 'home' | 'deck' | 'settings';
+
 export interface KeySignature {
   vk_code: number;
   scan_code: number;
