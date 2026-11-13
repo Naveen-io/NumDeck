@@ -123,3 +123,52 @@ export const NUMPAD_KEYS_LAYOUT: NumpadKeyDef[] = [
 
 export const ALL_NUMPAD_KEYS: string[] = NUMPAD_KEYS_LAYOUT.map((k) => k.id);
 
+/**
+ * Maps a browser DOM KeyboardEvent to a logical Numpad Deck key ID.
+ * Uses W3C KeyboardEvent.location === 3 (DOM_KEY_LOCATION_NUMPAD) and e.code
+ * to guarantee 100% isolation from main keyboard numbers, arrows, and Enter.
+ */
+export function domEventToNumpadKeyId(e: { code: string; location: number; key?: string }): string | null {
+  if (e.location === 3 || e.code.startsWith('Numpad') || e.code === 'NumLock') {
+    switch (e.code) {
+      case 'Numpad7': return 'numpad_7';
+      case 'Numpad8': return 'numpad_8';
+      case 'Numpad9': return 'numpad_9';
+      case 'Numpad4': return 'numpad_4';
+      case 'Numpad5': return 'numpad_5';
+      case 'Numpad6': return 'numpad_6';
+      case 'Numpad1': return 'numpad_1';
+      case 'Numpad2': return 'numpad_2';
+      case 'Numpad3': return 'numpad_3';
+      case 'Numpad0': return 'numpad_0';
+      case 'NumpadDecimal': return 'numpad_decimal';
+      case 'NumpadDivide': return 'numpad_divide';
+      case 'NumpadMultiply': return 'numpad_multiply';
+      case 'NumpadSubtract': return 'numpad_subtract';
+      case 'NumpadAdd': return 'numpad_add';
+      case 'NumpadEnter': return 'numpad_enter';
+      case 'NumLock': return 'numpad_numlock';
+      default: {
+        if (e.location === 3) {
+          switch (e.key) {
+            case 'Home': return 'numpad_7';
+            case 'ArrowUp': return 'numpad_8';
+            case 'PageUp': return 'numpad_9';
+            case 'ArrowLeft': return 'numpad_4';
+            case 'Clear': return 'numpad_5';
+            case 'ArrowRight': return 'numpad_6';
+            case 'End': return 'numpad_1';
+            case 'ArrowDown': return 'numpad_2';
+            case 'PageDown': return 'numpad_3';
+            case 'Insert': return 'numpad_0';
+            case 'Delete': return 'numpad_decimal';
+            case 'Enter': return 'numpad_enter';
+          }
+        }
+        return null;
+      }
+    }
+  }
+  return null;
+}
+

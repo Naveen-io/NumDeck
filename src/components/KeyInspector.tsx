@@ -121,7 +121,11 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
             {/* Action Buttons */}
             <div className="flex items-center gap-2 pt-1">
               <button
-                onClick={() => onTestAction(assignment.action!)}
+                tabIndex={-1}
+                onClick={(e) => {
+                  onTestAction(assignment.action!);
+                  e.currentTarget.blur();
+                }}
                 className="flex-1 py-2 px-3 rounded-lg bg-[#397BFF]/15 hover:bg-[#397BFF]/25 border border-[#397BFF]/40 text-[#397BFF] text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 title="Execute action right now to verify functionality"
               >
@@ -130,7 +134,11 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
               </button>
 
               <button
-                onClick={onEditAction}
+                tabIndex={-1}
+                onClick={(e) => {
+                  onEditAction();
+                  e.currentTarget.blur();
+                }}
                 className="py-2 px-3 rounded-lg bg-[#191E28] hover:bg-[#252C39] border border-[#252C39] text-[#F4F6FA] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
                 <Edit3 size={13} />
@@ -138,7 +146,11 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
               </button>
 
               <button
-                onClick={onRemoveAction}
+                tabIndex={-1}
+                onClick={(e) => {
+                  onRemoveAction();
+                  e.currentTarget.blur();
+                }}
                 className="py-2 px-2.5 rounded-lg bg-[#ED7777]/10 hover:bg-[#ED7777]/20 border border-[#ED7777]/30 text-[#ED7777] text-xs font-semibold flex items-center justify-center transition-all cursor-pointer"
                 title="Remove action from this key"
               >
@@ -149,7 +161,11 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
         ) : (
           <div className="space-y-4">
             <button
-              onClick={onEditAction}
+              tabIndex={-1}
+              onClick={(e) => {
+                onEditAction();
+                e.currentTarget.blur();
+              }}
               className="w-full py-3 px-4 rounded-xl bg-[#397BFF] hover:bg-[#5B91FF] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
             >
               <Plus size={16} />
@@ -249,7 +265,11 @@ const QuickPresetItem: React.FC<{
   onClick: () => void;
 }> = ({ icon, label, color, onClick }) => (
   <button
-    onClick={onClick}
+    tabIndex={-1}
+    onClick={(e) => {
+      onClick();
+      e.currentTarget.blur();
+    }}
     className="w-full flex items-center justify-between p-2.5 rounded-lg bg-[#12151C] hover:bg-[#191E28] border border-[#252C39] text-xs font-semibold text-[#929CAC] hover:text-[#F4F6FA] transition-all cursor-pointer"
   >
     <div className="flex items-center gap-2.5">

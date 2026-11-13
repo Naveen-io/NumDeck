@@ -167,6 +167,38 @@ fn extract_app_icon(path: String) -> Result<String, String> {
     icons::extract_icon_base64(&path)
 }
 
+#[command]
+fn trigger_deck_key(key_id: String, context: State<'_, AppContext>) -> Result<(), String> {
+    if let Some(engine) = context.engine.read().as_ref() {
+        let state = engine.state();
+        if *state.mode.read() == EngineMode::Deck {
+            let profile = state.active_profile.read();
+            let active_folder = state.active_folder_id.read();
+            let assignment = if let Some(folder_id) = active_folder.as_ref() {
+                profile
+                    .folders
+                    .iter()
+                    .find(|f| f.id == *folder_id)
+                    .and_then(|f| f.keys.get(&key_id))
+                    .or_else(|| profile.keys.get(&key_id))
+                    .cloned()
+            } else {
+                profile.keys.get(&key_id).cloned()
+            };
+
+            if let Some(assign) = assignment {
+                if let Some(action) = assign.action {
+                    let _ = engine.worker_tx.send(crate::keyboard::WorkerMessage::ExecuteAction {
+                        key_id: key_id.clone(),
+                        action,
+                    });
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let config_manager = ConfigManager::new();
@@ -224,7 +256,8 @@ pub fn run() {
             reset_calibration_to_default,
             test_action,
             browse_executable_file,
-            extract_app_icon
+            extract_app_icon,
+            trigger_deck_key
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

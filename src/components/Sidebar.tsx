@@ -61,7 +61,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <button
                 key={item.id}
-                onClick={() => onSelectTab(item.id)}
+                tabIndex={-1}
+                onClick={(e) => {
+                  onSelectTab(item.id);
+                  e.currentTarget.blur();
+                }}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                   isActive
                     ? 'bg-[#191E28] text-[#F4F6FA] border border-[#252C39] shadow-sm'
@@ -103,7 +107,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <button
-            onClick={onToggleDeckMode}
+            tabIndex={-1}
+            onClick={(e) => {
+              onToggleDeckMode();
+              e.currentTarget.blur();
+            }}
             className={`w-full py-2.5 px-3 rounded-lg flex items-center justify-center gap-2 text-xs font-bold transition-all shadow-sm cursor-pointer ${
               isDeckMode
                 ? 'bg-[#397BFF] text-white hover:bg-[#5B91FF]'

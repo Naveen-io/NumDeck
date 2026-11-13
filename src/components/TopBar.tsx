@@ -48,8 +48,12 @@ export const TopBar: React.FC<TopBarProps> = ({
         {/* Profile Dropdown */}
         <div className="relative flex items-center">
           <select
+            tabIndex={-1}
             value={activeProfileId}
-            onChange={(e) => onSelectProfile(e.target.value)}
+            onChange={(e) => {
+              onSelectProfile(e.target.value);
+              e.target.blur();
+            }}
             className="appearance-none bg-[#12151C] hover:bg-[#191E28] border border-[#252C39] rounded-lg pl-3 pr-8 py-1.5 text-xs font-semibold text-[#F4F6FA] cursor-pointer focus:outline-none focus:border-[#397BFF] transition-all"
           >
             {profiles.map((p) => (
@@ -96,7 +100,11 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         {/* Calibration Status Pill */}
         <button
-          onClick={onOpenCalibration}
+          tabIndex={-1}
+          onClick={(e) => {
+            onOpenCalibration();
+            e.currentTarget.blur();
+          }}
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-all cursor-pointer ${
             isCalibrated
               ? 'bg-[#12151C] text-[#929CAC] border-[#252C39] hover:border-[#397BFF]/60 hover:text-[#F4F6FA]'
@@ -123,7 +131,11 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         {/* Deck Mode Toggle Button */}
         <button
-          onClick={onToggleDeckMode}
+          tabIndex={-1}
+          onClick={(e) => {
+            onToggleDeckMode();
+            e.currentTarget.blur();
+          }}
           className={`flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
             isDeckMode
               ? 'bg-[#14264A] text-[#397BFF] border-[#397BFF]/70 shadow-[0_0_12px_rgba(57,123,255,0.25)]'

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { AppData, EngineMode, KeyAssignment, ActionConfig, CalibrationProfile, Profile } from './types';
+import React, { useState, useEffect, useRef } from 'react';
+import { AppData, EngineMode, KeyAssignment, ActionConfig, CalibrationProfile, Profile, domEventToNumpadKeyId } from './types';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -222,6 +222,53 @@ export const App: React.FC = () => {
       clearInterval(interval);
     };
   }, [appData]);
+
+  // Synchronized ref for capture-phase listener
+  const isDeckModeRef = useRef(isDeckMode);
+  useEffect(() => {
+    isDeckModeRef.current = isDeckMode;
+  }, [isDeckMode]);
+
+  // Global capture-phase keyboard interceptor
+  // Guarantees zero button focus movement and instant action execution when NUMPAD DECK is focused
+  useEffect(() => {
+    const handleKeyDownCapture = (e: KeyboardEvent) => {
+      if (isDeckModeRef.current) {
+        const keyId = domEventToNumpadKeyId(e);
+        if (keyId) {
+          // Strictly prevent browser spatial navigation / button focus jumping
+          e.preventDefault();
+          e.stopPropagation();
+
+          // Defocus active element so focus never sticks
+          if (document.activeElement && (document.activeElement as HTMLElement).blur) {
+            (document.activeElement as HTMLElement).blur();
+          }
+
+          // Trigger action via backend
+          invoke('trigger_deck_key', { keyId }).catch(console.error);
+        }
+      }
+    };
+
+    const handleKeyUpCapture = (e: KeyboardEvent) => {
+      if (isDeckModeRef.current) {
+        const keyId = domEventToNumpadKeyId(e);
+        if (keyId) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDownCapture, { capture: true });
+    window.addEventListener('keyup', handleKeyUpCapture, { capture: true });
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDownCapture, { capture: true });
+      window.removeEventListener('keyup', handleKeyUpCapture, { capture: true });
+    };
+  }, []);
 
   // Audio click synthesizer using Web Audio API
   const playAudioClick = () => {

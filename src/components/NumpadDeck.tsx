@@ -82,7 +82,11 @@ export const NumpadDeck: React.FC<NumpadDeckProps> = ({
               return (
                 <button
                   key={keyDef.id}
-                  onClick={() => onSelectKey(keyDef.id)}
+                  tabIndex={-1}
+                  onClick={(e) => {
+                    onSelectKey(keyDef.id);
+                    e.currentTarget.blur();
+                  }}
                   style={style}
                   className={`group relative flex flex-col items-center justify-between p-2.5 rounded-xl transition-all duration-100 cursor-pointer border select-none overflow-hidden text-left ${
                     isSelected
