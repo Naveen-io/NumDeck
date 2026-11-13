@@ -30,6 +30,54 @@ pub struct KeySignature {
     pub is_extended: bool,
 }
 
+/// Validate whether an incoming physical key event can legitimately belong to a numeric keypad.
+/// Defensively rejects main-keyboard keys, Windows keys, Escape, Tab, top-row digits, and dedicated arrow clusters.
+pub fn is_valid_numpad_event(vk_code: u32, scan_code: u32, is_extended: bool) -> bool {
+    // 1. Explicitly reject system and main-keyboard control keys
+    match vk_code {
+        0x5B | 0x5C => return false, // VK_LWIN, VK_RWIN (Windows keys)
+        0x1B => return false,        // VK_ESCAPE
+        0x09 => return false,        // VK_TAB
+        0x14 => return false,        // VK_CAPITAL
+        0x20 => return false,        // VK_SPACE
+        0x08 => return false,        // VK_BACK
+        0xC0 => return false,        // VK_OEM_3 (~)
+        0x30..=0x39 => return false, // Top-row numbers 0-9
+        0x41..=0x5A => return false, // Letters A-Z
+        _ => {}
+    }
+
+    // 2. Distinguish Main Enter (Ext=0) from Numpad Enter (Ext=1)
+    if vk_code == 0x0D {
+        return is_extended; // Only Numpad Enter has is_extended == true
+    }
+
+    // 3. Dedicated navigation cluster keys (Ext=1) vs Numpad keys (Ext=0)
+    match vk_code {
+        0x21..=0x28 | 0x2D | 0x2E => {
+            // VK_PRIOR, VK_NEXT, VK_END, VK_HOME, VK_LEFT, VK_UP, VK_RIGHT, VK_DOWN, VK_INSERT, VK_DELETE
+            // Dedicated navigation keys have is_extended = true.
+            // On a numpad, these navigation keys have is_extended = false.
+            if is_extended {
+                return false;
+            }
+        }
+        _ => {}
+    }
+
+    // 4. Standard numpad scan codes check
+    // 0x45 (NumLock), 0x35 (Divide), 0x37 (Multiply), 0x4A (Subtract), 0x4E (Add), 0x1C (Enter)
+    // 0x47..=0x53 (7, 8, 9, 4, 5, 6, 1, 2, 3, 0, Decimal)
+    match scan_code {
+        0x45 | 0x35 | 0x37 | 0x4A | 0x4E | 0x1C => true,
+        0x47..=0x53 => true,
+        _ => {
+            // If custom laptop scan code, allow ONLY if vk_code is a standard numpad VK
+            matches!(vk_code, 0x60..=0x6F | 0x90 | 0x0C)
+        }
+    }
+}
+
 impl KeySignature {
     pub fn new(vk_code: u32, scan_code: u32, is_extended: bool) -> Self {
         Self {
@@ -219,13 +267,16 @@ impl CalibrationProfile {
 
     /// Match an incoming physical key event against calibrated keys.
     /// Returns the logical key id if matched.
-    pub fn find_matched_key(&self, _vk_code: u32, scan_code: u32, is_extended: bool) -> Option<String> {
+    pub fn find_matched_key(&self, vk_code: u32, scan_code: u32, is_extended: bool) -> Option<String> {
+        // Enforce physical numpad validity first: system keys, main keyboard keys, and dedicated nav keys are immediately rejected
+        if !is_valid_numpad_event(vk_code, scan_code, is_extended) {
+            return None;
+        }
+
         for (key_id, sigs) in &self.signatures {
             for sig in sigs {
                 // Primary check: scan code + extended bit must match
                 if sig.matches_hardware(scan_code, is_extended) {
-                    // Secondary check: if vk_code is also recorded, ensure it matches either recorded vk
-                    // or allow if scan code uniquely maps to numpad
                     return Some(key_id.clone());
                 }
             }
@@ -464,6 +515,36 @@ mod tests {
 
         assert_eq!(cal.find_matched_key(0x67, 0x88, false), Some("numpad_7".to_string()));
         assert_eq!(cal.find_matched_key(0x67, 0x47, false), None);
+    }
+
+    #[test]
+    fn test_system_keys_never_matched() {
+        let mut cal = CalibrationProfile::standard_default();
+        // Simulate corrupted signatures (like the ones found in user's config.json)
+        cal.signatures.insert(
+            "numpad_0".to_string(),
+            vec![KeySignature::new(0x5B, 0x5B, true)], // Left Windows Key
+        );
+        cal.signatures.insert(
+            "numpad_divide".to_string(),
+            vec![KeySignature::new(0x1B, 0x01, false)], // Escape Key
+        );
+        cal.signatures.insert(
+            "numpad_multiply".to_string(),
+            vec![KeySignature::new(0xC0, 0x29, false)], // Tilde Key
+        );
+
+        // Windows key (0x5B) MUST NEVER MATCH, even if present in signatures
+        assert_eq!(cal.find_matched_key(0x5B, 0x5B, true), None);
+
+        // Escape key (0x1B) MUST NEVER MATCH, even if present in signatures
+        assert_eq!(cal.find_matched_key(0x1B, 0x01, false), None);
+
+        // Tilde key (0xC0) MUST NEVER MATCH, even if present in signatures
+        assert_eq!(cal.find_matched_key(0xC0, 0x29, false), None);
+
+        // Tab key (0x09) MUST NEVER MATCH
+        assert_eq!(cal.find_matched_key(0x09, 0x0F, false), None);
     }
 
     #[test]

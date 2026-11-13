@@ -545,6 +545,7 @@ export const App: React.FC = () => {
         <CalibrationWizard
           initialCalibration={appData.calibration}
           numLockOn={numLockOn}
+          isDeckMode={isDeckMode}
           onSave={handleSaveCalibration}
           onCancel={() => setIsCalibrationOpen(false)}
           onResetDefaults={handleResetCalibration}

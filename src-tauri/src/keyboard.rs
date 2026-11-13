@@ -50,6 +50,7 @@ pub enum WorkerMessage {
     },
     Telemetry(TelemetryRecord),
     CalibrationKeyCaptured(KeySignature),
+    EmergencyReset,
 }
 
 /// State shared between Tauri commands, Low-Level Hook, and Action Executor
@@ -279,6 +280,13 @@ impl KeyboardEngine {
                 WorkerMessage::CalibrationKeyCaptured(sig) => {
                     let _ = app.emit("calibration-key-captured", sig);
                 }
+
+                WorkerMessage::EmergencyReset => {
+                    log::warn!("Off-thread worker processing EmergencyReset...");
+                    *state.mode.write() = EngineMode::Normal;
+                    let _ = app.emit("deck-mode-changed", false);
+                    let _ = app.emit("emergency-reset", ());
+                }
             }
         }
         log::info!("Off-thread action/telemetry worker terminated.");
@@ -433,6 +441,7 @@ unsafe extern "system" fn low_level_keyboard_proc(
                         *hook_data.state.mode.write() = EngineMode::Normal;
                         hook_data.state.esc_press_count.store(0, Ordering::SeqCst);
                         log::warn!("EMERGENCY DISABLE TRIGGERED: Deck Mode forcibly reset to Normal!");
+                        let _ = hook_data.worker_tx.send(WorkerMessage::EmergencyReset);
                     }
                 } else {
                     hook_data.state.esc_press_count.store(1, Ordering::SeqCst);

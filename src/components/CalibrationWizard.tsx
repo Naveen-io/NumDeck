@@ -15,6 +15,7 @@ import {
 interface CalibrationWizardProps {
   initialCalibration: CalibrationProfile;
   numLockOn: boolean;
+  isDeckMode?: boolean;
   onSave: (calibration: CalibrationProfile) => void;
   onCancel: () => void;
   onResetDefaults: () => void;
@@ -43,6 +44,7 @@ const KEY_LABELS: Record<string, string> = {
 export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
   initialCalibration,
   numLockOn,
+  isDeckMode = false,
   onSave,
   onCancel,
   onResetDefaults,
@@ -59,15 +61,15 @@ export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
   const targetKeyId = ALL_NUMPAD_KEYS[currentStepIndex];
   const targetKeyName = KEY_LABELS[targetKeyId] || targetKeyId;
 
-  // Switch engine to Calibrating mode while wizard is open
+  // Switch engine to Calibrating mode while wizard is open; restore previous mode on unmount
   useEffect(() => {
     invoke('set_engine_mode', { mode: 'Calibrating' }).catch(console.error);
 
     return () => {
-      // Revert to Normal mode on unmount
-      invoke('set_engine_mode', { mode: 'Normal' }).catch(console.error);
+      const restoreMode = isDeckMode ? 'Deck' : 'Normal';
+      invoke('set_engine_mode', { mode: restoreMode }).catch(console.error);
     };
-  }, []);
+  }, [isDeckMode]);
 
   // Listen for captured key events from the backend hook
   useEffect(() => {
@@ -89,17 +91,42 @@ export const CalibrationWizard: React.FC<CalibrationWizardProps> = ({
           return;
         }
 
-        // Validate candidate key
+        // Validate candidate key: strictly reject system and main-keyboard keys
+        if (sig.vk_code === 0x5B || sig.vk_code === 0x5C) {
+          setValidationWarning('Invalid Key: Windows key detected. Please press the physical numeric keypad key.');
+          setPendingSignature(null);
+          return;
+        }
+
+        if (sig.vk_code === 0x1B) {
+          setValidationWarning('Invalid Key: Escape key detected. Please press the physical numeric keypad key.');
+          setPendingSignature(null);
+          return;
+        }
+
+        if (sig.vk_code === 0x09) {
+          setValidationWarning('Invalid Key: Tab key detected. Please press the physical numeric keypad key.');
+          setPendingSignature(null);
+          return;
+        }
+
+        if (sig.vk_code === 0xC0) {
+          setValidationWarning('Invalid Key: Tilde (~) key detected. Please press the physical numeric keypad key.');
+          setPendingSignature(null);
+          return;
+        }
+
+        if (sig.scan_code < 0x47 && sig.vk_code >= 0x30 && sig.vk_code <= 0x39) {
+          setValidationWarning(`Invalid Key: Top-row number '${String.fromCharCode(sig.vk_code)}' detected. Please press the physical numeric keypad key.`);
+          setPendingSignature(null);
+          return;
+        }
+
         let warning: string | null = null;
 
         // Check if user pressed main keyboard Enter instead of Numpad Enter
         if (targetKeyId === 'numpad_enter' && !sig.is_extended && sig.scan_code === 0x1c) {
           warning = 'Warning: This event matches Main Enter (Ext=0). Please press the numeric keypad Enter (Ext=1).';
-        }
-
-        // Check if user pressed top-row numbers
-        if (sig.scan_code < 0x47 && sig.vk_code >= 0x30 && sig.vk_code <= 0x39) {
-          warning = `Warning: This appears to be top-row '${String.fromCharCode(sig.vk_code)}'. Please press physical numpad key.`;
         }
 
         // Check for duplicate assignment
