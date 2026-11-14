@@ -8,9 +8,80 @@ use actions::ActionExecutor;
 use config::ConfigManager;
 use keyboard::KeyboardEngine;
 use parking_lot::RwLock;
-use tauri::{command, AppHandle, Emitter, Manager, State};
+use tauri::{
+    command,
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Emitter, Manager, State,
+};
 use types::*;
+use windows_sys::Win32::System::Registry::{
+    RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER, KEY_SET_VALUE,
+    REG_SZ,
+};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
+
+pub fn update_startup_registry(enable: bool) -> Result<(), String> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    fn to_wide(s: &str) -> Vec<u16> {
+        OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+    }
+
+    let subkey = to_wide("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+    let mut hkey = std::ptr::null_mut();
+
+    let status = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            subkey.as_ptr(),
+            0,
+            KEY_SET_VALUE,
+            &mut hkey,
+        )
+    };
+
+    if status != 0 {
+        return Err(format!("Failed to open Run registry key: error code {}", status));
+    }
+
+    let value_name = to_wide("NumDeck");
+
+    let result = if enable {
+        let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
+        let exe_str = format!("\"{}\"", exe_path.to_string_lossy());
+        let wide_data = to_wide(&exe_str);
+        let byte_len = (wide_data.len() * 2) as u32;
+
+        let set_status = unsafe {
+            RegSetValueExW(
+                hkey,
+                value_name.as_ptr(),
+                0,
+                REG_SZ,
+                wide_data.as_ptr() as *const u8,
+                byte_len,
+            )
+        };
+        if set_status == 0 {
+            Ok(())
+        } else {
+            Err(format!("Failed to set registry value: error code {}", set_status))
+        }
+    } else {
+        unsafe {
+            let _ = RegDeleteValueW(hkey, value_name.as_ptr());
+        }
+        Ok(())
+    };
+
+    unsafe {
+        RegCloseKey(hkey);
+    }
+
+    result
+}
 
 pub struct AppContext {
     pub engine: RwLock<Option<KeyboardEngine>>,
@@ -107,6 +178,7 @@ fn save_settings(
     context: State<'_, AppContext>,
 ) -> Result<(), String> {
     let mut data = context.data.write();
+    let old_run_at_startup = data.settings.run_at_startup;
     data.settings = settings.clone();
 
     if let Some(engine) = context.engine.read().as_ref() {
@@ -120,7 +192,69 @@ fn save_settings(
             .store(settings.sound_feedback, std::sync::atomic::Ordering::Relaxed);
     }
 
+    if old_run_at_startup != settings.run_at_startup {
+        if let Err(e) = update_startup_registry(settings.run_at_startup) {
+            log::warn!("Failed to update autostart registry: {}", e);
+        }
+    }
+
     context.config_manager.save(&data)
+}
+
+#[command]
+fn reset_profile_to_default(
+    profile_id: String,
+    context: State<'_, AppContext>,
+    app: AppHandle,
+) -> Result<Profile, String> {
+    let default_profile = ConfigManager::get_default_profile(&profile_id)
+        .ok_or_else(|| format!("Default profile for '{}' not found", profile_id))?;
+
+    let mut data = context.data.write();
+    if let Some(existing) = data.profiles.iter_mut().find(|p| p.id == profile_id) {
+        *existing = default_profile.clone();
+    } else {
+        data.profiles.push(default_profile.clone());
+    }
+
+    // If this is the active profile, update the engine
+    if data.settings.active_profile_id == profile_id {
+        if let Some(engine) = context.engine.read().as_ref() {
+            *engine.state().active_profile.write() = default_profile.clone();
+            *engine.state().active_folder_id.write() = None;
+        }
+    }
+
+    let _ = context.config_manager.save(&data);
+    let _ = app.emit("profiles-updated", data.profiles.clone());
+    Ok(default_profile)
+}
+
+#[command]
+fn reset_all_profiles_to_default(
+    context: State<'_, AppContext>,
+    app: AppHandle,
+) -> Result<Vec<Profile>, String> {
+    let defaults = ConfigManager::get_all_default_profiles();
+    let mut data = context.data.write();
+    data.profiles = defaults.clone();
+
+    let active_id = data.settings.active_profile_id.clone();
+    let active_profile = data
+        .profiles
+        .iter()
+        .find(|p| p.id == active_id)
+        .cloned()
+        .unwrap_or_else(|| defaults[0].clone());
+
+    if let Some(engine) = context.engine.read().as_ref() {
+        *engine.state().active_profile.write() = active_profile;
+        *engine.state().active_folder_id.write() = None;
+    }
+
+    let _ = context.config_manager.save(&data);
+    let _ = app.emit("profiles-updated", data.profiles.clone());
+    Ok(defaults)
 }
 
 #[command]
@@ -219,6 +353,13 @@ pub fn run() {
             let app_handle = app.handle().clone();
             let app_context = app.state::<AppContext>();
 
+            // Ensure autostart setting is synchronized
+            if app_data.settings.run_at_startup {
+                if let Err(e) = update_startup_registry(true) {
+                    log::warn!("Initial autostart registry check failed: {}", e);
+                }
+            }
+
             // Find current active profile
             let active_id = app_data.settings.active_profile_id.clone();
             let active_profile = app_data
@@ -243,8 +384,91 @@ pub fn run() {
             );
 
             *app_context.engine.write() = Some(engine);
+
+            // Configure System Tray
+            let open_i = MenuItem::with_id(app, "open", "Open NumDeck", true, None::<&str>)?;
+            let toggle_deck_i = MenuItem::with_id(app, "toggle_deck", "Toggle Deck Mode", true, None::<&str>)?;
+            let exit_i = MenuItem::with_id(app, "exit", "Exit NumDeck", true, None::<&str>)?;
+            let tray_menu = Menu::with_items(app, &[&open_i, &toggle_deck_i, &exit_i])?;
+
+            let mut tray_builder = TrayIconBuilder::new()
+                .menu(&tray_menu)
+                .tooltip("NumDeck")
+                .on_menu_event(|app, event| {
+                    match event.id.as_ref() {
+                        "open" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.unminimize();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "toggle_deck" => {
+                            if let Some(context) = app.try_state::<AppContext>() {
+                                let target_mode = if let Some(engine) = context.engine.read().as_ref() {
+                                    let current = *engine.state().mode.read();
+                                    let target = if current == EngineMode::Deck {
+                                        EngineMode::Normal
+                                    } else {
+                                        EngineMode::Deck
+                                    };
+                                    *engine.state().mode.write() = target;
+                                    let is_deck = target == EngineMode::Deck;
+                                    let _ = app.emit("deck-mode-changed", is_deck);
+                                    target
+                                } else {
+                                    EngineMode::Normal
+                                };
+
+                                let mut data = context.data.write();
+                                data.settings.deck_mode = target_mode == EngineMode::Deck;
+                                let _ = context.config_manager.save(&data);
+                            }
+                        }
+                        "exit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.unminimize();
+                            let _ = window.set_focus();
+                        }
+                    }
+                });
+
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            }
+
+            let _ = tray_builder.build(app)?;
+
             log::info!("Numpad Deck Backend initialized successfully.");
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let app = window.app_handle();
+                if let Some(context) = app.try_state::<AppContext>() {
+                    let minimize_to_tray = context.data.read().settings.minimize_to_tray;
+                    if minimize_to_tray {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    } else {
+                        app.exit(0);
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             get_initial_data,
@@ -256,6 +480,8 @@ pub fn run() {
             save_settings,
             save_calibration,
             reset_calibration_to_default,
+            reset_profile_to_default,
+            reset_all_profiles_to_default,
             test_action,
             browse_executable_file,
             extract_app_icon,

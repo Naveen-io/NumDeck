@@ -243,21 +243,21 @@ impl KeyboardEngine {
                         t.hook_duration_us
                     );
 
-                    // Write to local engine_debug.log
-                    if let Some(ref mut f) = log_file {
-                        let _ = writeln!(f, "{}", line);
-                        let _ = f.flush();
-                    }
-
-                    // Also mirror to APPDATA log if available
-                    if let Some(ref ap_path) = appdata_log_path {
-                        if let Ok(mut ap_file) = OpenOptions::new().create(true).append(true).open(ap_path) {
-                            let _ = writeln!(ap_file, "{}", line);
+                    // Write to debug log and stdout only when diagnostics active or in debug builds
+                    if cfg!(debug_assertions) || state.diagnostics_active.load(Ordering::Relaxed) {
+                        if let Some(ref mut f) = log_file {
+                            let _ = writeln!(f, "{}", line);
+                            let _ = f.flush();
                         }
-                    }
 
-                    // Mirror to console / stdout
-                    println!("{}", line);
+                        if let Some(ref ap_path) = appdata_log_path {
+                            if let Ok(mut ap_file) = OpenOptions::new().create(true).append(true).open(ap_path) {
+                                let _ = writeln!(ap_file, "{}", line);
+                            }
+                        }
+
+                        println!("{}", line);
+                    }
 
                     // Emit diagnostic event to UI if viewer active
                     if state.diagnostics_active.load(Ordering::Relaxed) {

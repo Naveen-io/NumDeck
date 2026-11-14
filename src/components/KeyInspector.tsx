@@ -6,12 +6,17 @@ import {
   Trash2, 
   Edit3, 
   Plus, 
-  Keyboard 
+  Keyboard,
+  Copy,
+  ClipboardPaste
 } from 'lucide-react';
 
 interface KeyInspectorProps {
   selectedKeyId: string | null;
   assignment?: KeyAssignment;
+  copiedAssignment?: Omit<KeyAssignment, 'key_id'> | null;
+  onCopyAction?: () => void;
+  onPasteAction?: () => void;
   onEditAction: () => void;
   onRemoveAction: () => void;
   onTestAction: (action: ActionConfig) => void;
@@ -21,6 +26,9 @@ interface KeyInspectorProps {
 export const KeyInspector: React.FC<KeyInspectorProps> = ({
   selectedKeyId,
   assignment,
+  copiedAssignment,
+  onCopyAction,
+  onPasteAction,
   onEditAction,
   onRemoveAction,
   onTestAction,
@@ -237,6 +245,34 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
                   <span>Configure</span>
                 </button>
 
+                {onCopyAction && (
+                  <button
+                    tabIndex={-1}
+                    onClick={(e) => {
+                      onCopyAction();
+                      e.currentTarget.blur();
+                    }}
+                    className="py-1.5 px-3 rounded-lg text-xs font-semibold bg-[#181E2C] hover:bg-[#222B3E] text-[#94A3B8] hover:text-[#F1F5F9] border border-[#2A354C] flex items-center justify-center gap-1 cursor-pointer"
+                    title="Copy Action"
+                  >
+                    <Copy size={12} />
+                  </button>
+                )}
+
+                {copiedAssignment && onPasteAction && (
+                  <button
+                    tabIndex={-1}
+                    onClick={(e) => {
+                      onPasteAction();
+                      e.currentTarget.blur();
+                    }}
+                    className="py-1.5 px-3 rounded-lg text-xs font-semibold bg-[#181E2C] hover:bg-[#222B3E] text-[#10B981] border border-[#10B981]/40 flex items-center justify-center gap-1 cursor-pointer"
+                    title={`Paste Action (${copiedAssignment.label})`}
+                  >
+                    <ClipboardPaste size={12} />
+                  </button>
+                )}
+
                 <button
                   tabIndex={-1}
                   onClick={(e) => {
@@ -264,17 +300,33 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
               </p>
             </div>
 
-            <button
-              tabIndex={-1}
-              onClick={(e) => {
-                onEditAction();
-                e.currentTarget.blur();
-              }}
-              className="w-full py-2 px-3 rounded-lg text-xs font-bold bg-[#1D4ED8] hover:bg-[#2563EB] text-white flex items-center justify-center gap-2 cursor-pointer border border-[#3B82F6]"
-            >
-              <Plus size={13} strokeWidth={2.5} />
-              <span>Assign Action</span>
-            </button>
+            <div className="flex flex-col gap-2">
+              <button
+                tabIndex={-1}
+                onClick={(e) => {
+                  onEditAction();
+                  e.currentTarget.blur();
+                }}
+                className="w-full py-2 px-3 rounded-lg text-xs font-bold bg-[#1D4ED8] hover:bg-[#2563EB] text-white flex items-center justify-center gap-2 cursor-pointer border border-[#3B82F6]"
+              >
+                <Plus size={13} strokeWidth={2.5} />
+                <span>Assign Action</span>
+              </button>
+
+              {copiedAssignment && onPasteAction && (
+                <button
+                  tabIndex={-1}
+                  onClick={(e) => {
+                    onPasteAction();
+                    e.currentTarget.blur();
+                  }}
+                  className="w-full py-1.5 px-3 rounded-lg text-xs font-bold bg-[#10B981]/15 hover:bg-[#10B981]/25 text-[#10B981] flex items-center justify-center gap-2 cursor-pointer border border-[#10B981]/40"
+                >
+                  <ClipboardPaste size={13} />
+                  <span>Paste "{copiedAssignment.label}"</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 

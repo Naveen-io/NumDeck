@@ -197,6 +197,115 @@ export const SlackIcon: React.FC<AppIconProps> = ({ size = 20, className = '' })
   </svg>
 );
 
+// 21. YouTube
+export const YouTubeIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#FF0000" />
+    <path d="M38 17.5C37.6 15.5 36.1 14 34.1 13.5C31.5 13 24 13 24 13C24 13 16.5 13 13.9 13.5C11.9 14 10.4 15.5 10 17.5C9.5 20.5 9.5 24 9.5 24C9.5 24 9.5 27.5 10 30.5C10.4 32.5 11.9 34 13.9 34.5C16.5 35 24 35 24 35C24 35 31.5 35 34.1 34.5C36.1 34 37.6 32.5 38 30.5C38.5 27.5 38.5 24 38.5 24C38.5 24 38.5 20.5 38 17.5Z" fill="#FFFFFF"/>
+    <polygon points="21,19 21,29 30,24" fill="#FF0000" />
+  </svg>
+);
+
+// 22. Twitch
+export const TwitchIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#9146FF" />
+    <path d="M12 9L9 16V35H17V39H21L25 35H31L39 27V9H12ZM35 25L30 30H24L20 34V30H15V14H35V25Z" fill="#FFFFFF"/>
+    <rect x="23" y="19" width="3" height="6" fill="#9146FF"/>
+    <rect x="30" y="19" width="3" height="6" fill="#9146FF"/>
+  </svg>
+);
+
+// 23. GitHub
+export const GitHubIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <circle cx="24" cy="24" r="22" fill="#24292F" />
+    <path fillRule="evenodd" clipRule="evenodd" d="M24 8C15.16 8 8 15.16 8 24C8 31.07 12.59 37.07 18.96 39.19C19.76 39.34 20.05 38.84 20.05 38.42C20.05 38.04 20.04 36.78 20.03 35.43C15.58 36.4 14.64 33.51 14.64 33.51C13.91 31.66 12.87 31.17 12.87 31.17C11.42 30.18 12.98 30.2 12.98 30.2C14.59 30.31 15.43 31.85 15.43 31.85C16.86 34.3 19.18 33.6 20.09 33.19C20.24 32.15 20.65 31.45 21.11 31.05C17.56 30.65 13.82 29.28 13.82 23.16C13.82 21.42 14.44 19.99 15.46 18.87C15.3 18.47 14.75 16.84 15.62 14.64C15.62 14.64 16.96 14.21 20.01 16.27C21.28 15.92 22.64 15.74 24 15.74C25.36 15.74 26.72 15.92 27.99 16.27C31.04 14.21 32.38 14.64 32.38 14.64C33.25 16.84 32.7 18.47 32.54 18.87C33.56 19.99 34.18 21.42 34.18 23.16C34.18 29.3 30.43 30.64 26.87 31.04C27.44 31.54 27.95 32.51 27.95 34C27.95 36.16 27.93 37.89 27.93 38.42C27.93 38.84 28.22 39.35 29.03 39.19C35.4 37.06 40 31.07 40 24C40 15.16 32.84 8 24 8Z" fill="#FFFFFF"/>
+  </svg>
+);
+
+// 24. Notion
+export const NotionIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#191919" stroke="#333333" strokeWidth="2"/>
+    <path d="M14 13L30 11L34 15V35L29 36L19 22V35L14 36V13Z" fill="#FFFFFF"/>
+    <path d="M20 14L32 12.5V16L24 27L20 22V14Z" fill="#E2E8F0"/>
+  </svg>
+);
+
+// 25. Gmail / Email
+export const GmailIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#FFFFFF" />
+    <path d="M10 14C8.9 14 8 14.9 8 16V32C8 33.1 8.9 34 10 34H14V21.5L24 29L34 21.5V34H38C39.1 34 40 33.1 40 32V16C40 14.9 39.1 14 38 14H36L24 23L12 14H10Z" fill="#EA4335"/>
+    <polygon points="8,16 8,24 18,17 18,14" fill="#4285F4"/>
+    <polygon points="40,16 40,24 30,17 30,14" fill="#34A853"/>
+    <polygon points="34,21.5 40,26 40,32 34,34" fill="#FBBC05"/>
+  </svg>
+);
+
+// 26. Google Calendar
+export const GoogleCalendarIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#FFFFFF" />
+    <path d="M10 12H38V16H10V12Z" fill="#4285F4"/>
+    <path d="M10 16H38V36C38 37.1 37.1 38 36 38H12C10.9 38 10 37.1 10 36V16Z" fill="#F8FAFC"/>
+    <text x="24" y="32" fill="#1E293B" fontFamily="'Segoe UI', Roboto, sans-serif" fontSize="16" fontWeight="bold" textAnchor="middle">31</text>
+  </svg>
+);
+
+// 27. Google Drive
+export const GoogleDriveIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#181E29" />
+    <path d="M19 12L10 27L14.5 35L23.5 20L19 12Z" fill="#0F9D58"/>
+    <path d="M29 12H19L23.5 20H33.5L29 12Z" fill="#FFBB00"/>
+    <path d="M23.5 20L14.5 35H34.5L38 29L33.5 20H23.5Z" fill="#4285F4"/>
+  </svg>
+);
+
+// 28. Instagram
+export const InstagramIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <defs>
+      <radialGradient id="igGrad" cx="20%" cy="100%" r="130%">
+        <stop offset="0%" stopColor="#FFD600"/>
+        <stop offset="25%" stopColor="#FF7A00"/>
+        <stop offset="50%" stopColor="#FF0069"/>
+        <stop offset="75%" stopColor="#D300C5"/>
+        <stop offset="100%" stopColor="#7638FA"/>
+      </radialGradient>
+    </defs>
+    <rect width="48" height="48" rx="12" fill="url(#igGrad)" />
+    <rect x="12" y="12" width="24" height="24" rx="7" stroke="#FFFFFF" strokeWidth="3" fill="none"/>
+    <circle cx="24" cy="24" r="6" stroke="#FFFFFF" strokeWidth="3" fill="none"/>
+    <circle cx="31" cy="17" r="1.5" fill="#FFFFFF"/>
+  </svg>
+);
+
+// 29. Twitter / X
+export const TwitterXIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <rect width="48" height="48" rx="10" fill="#000000" />
+    <path d="M14 13L22.5 24.5L14 35H16.5L23.6 26.1L29.6 35H35L26 22.8L33.8 13H31.3L24.8 21.2L19.4 13H14ZM17.8 15H20.4L31.2 33H28.6L17.8 15Z" fill="#FFFFFF"/>
+  </svg>
+);
+
+// 30. Reddit
+export const RedditIcon: React.FC<AppIconProps> = ({ size = 20, className = '' }) => (
+  <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+    <circle cx="24" cy="24" r="22" fill="#FF4500" />
+    <circle cx="24" cy="26" r="11" fill="#FFFFFF"/>
+    <circle cx="14" cy="25" r="3.5" fill="#FFFFFF"/>
+    <circle cx="34" cy="25" r="3.5" fill="#FFFFFF"/>
+    <circle cx="19" cy="25" r="2.5" fill="#FF4500"/>
+    <circle cx="29" cy="25" r="2.5" fill="#FF4500"/>
+    <path d="M20 30C21.5 32 26.5 32 28 30" stroke="#FF4500" strokeWidth="2" strokeLinecap="round"/>
+    <path d="M24 15L27 10L32 11" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round"/>
+    <circle cx="32" cy="11" r="2" fill="#FFFFFF"/>
+  </svg>
+);
+
 // Registry of supported applications for fast lookup
 export const KNOWN_APP_ICONS: Record<string, React.FC<AppIconProps>> = {
   chrome: ChromeIcon,
@@ -226,6 +335,20 @@ export const KNOWN_APP_ICONS: Record<string, React.FC<AppIconProps>> = {
   teams: TeamsIcon,
   msteams: TeamsIcon,
   slack: SlackIcon,
+  youtube: YouTubeIcon,
+  twitch: TwitchIcon,
+  github: GitHubIcon,
+  notion: NotionIcon,
+  gmail: GmailIcon,
+  mail: GmailIcon,
+  calendar: GoogleCalendarIcon,
+  googlecalendar: GoogleCalendarIcon,
+  drive: GoogleDriveIcon,
+  googledrive: GoogleDriveIcon,
+  instagram: InstagramIcon,
+  twitter: TwitterXIcon,
+  x: TwitterXIcon,
+  reddit: RedditIcon,
 };
 
 export const getAppIconComponent = (iconKey: string): React.FC<AppIconProps> | null => {

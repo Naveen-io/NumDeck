@@ -87,19 +87,34 @@ impl ConfigManager {
 
     /// Generate initial standard profiles
     pub fn create_default_data() -> AppData {
-        let profiles = vec![
-            Self::create_general_profile(),
-            Self::create_gaming_profile(),
-            Self::create_coding_profile(),
-            Self::create_editing_profile(),
-            Self::create_streaming_profile(),
-        ];
-
         AppData {
             version: 1,
             settings: AppSettings::default(),
             calibration: CalibrationProfile::standard_default(),
-            profiles,
+            profiles: Self::get_all_default_profiles(),
+        }
+    }
+
+    pub fn get_all_default_profiles() -> Vec<Profile> {
+        vec![
+            Self::create_general_profile(),
+            Self::create_gaming_profile(),
+            Self::create_coding_profile(),
+            Self::create_streaming_profile(),
+            Self::create_editing_profile(),
+            Self::create_productivity_profile(),
+        ]
+    }
+
+    pub fn get_default_profile(profile_id: &str) -> Option<Profile> {
+        match profile_id {
+            "general" => Some(Self::create_general_profile()),
+            "gaming" => Some(Self::create_gaming_profile()),
+            "coding" => Some(Self::create_coding_profile()),
+            "streaming" => Some(Self::create_streaming_profile()),
+            "editing" => Some(Self::create_editing_profile()),
+            "productivity" => Some(Self::create_productivity_profile()),
+            _ => None,
         }
     }
 
@@ -346,6 +361,65 @@ impl ConfigManager {
     fn create_gaming_profile() -> Profile {
         let mut keys = HashMap::new();
         keys.insert(
+            "numpad_numlock".to_string(),
+            KeyAssignment {
+                key_id: "numpad_numlock".to_string(),
+                label: "Deck Toggle".to_string(),
+                icon: "Power".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::ToggleDeckMode),
+            },
+        );
+        keys.insert(
+            "numpad_divide".to_string(),
+            KeyAssignment {
+                key_id: "numpad_divide".to_string(),
+                label: "Discord Mute".to_string(),
+                icon: "VolumeX".to_string(),
+                color: Some("#5865F2".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+                    key: "M".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_multiply".to_string(),
+            KeyAssignment {
+                key_id: "numpad_multiply".to_string(),
+                label: "Play / Pause".to_string(),
+                icon: "PlayPause".to_string(),
+                color: Some("#1DB954".to_string()),
+                action: Some(ActionConfig::SystemMedia {
+                    command: "play_pause".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_subtract".to_string(),
+            KeyAssignment {
+                key_id: "numpad_subtract".to_string(),
+                label: "Vol Down".to_string(),
+                icon: "Volume1".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::SystemMedia {
+                    command: "volume_down".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_add".to_string(),
+            KeyAssignment {
+                key_id: "numpad_add".to_string(),
+                label: "Vol Up".to_string(),
+                icon: "Volume2".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::SystemMedia {
+                    command: "volume_up".to_string(),
+                }),
+            },
+        );
+        keys.insert(
             "numpad_7".to_string(),
             KeyAssignment {
                 key_id: "numpad_7".to_string(),
@@ -386,11 +460,112 @@ impl ConfigManager {
             "numpad_4".to_string(),
             KeyAssignment {
                 key_id: "numpad_4".to_string(),
+                label: "Prev Track".to_string(),
+                icon: "SkipBack".to_string(),
+                color: Some("#1DB954".to_string()),
+                action: Some(ActionConfig::SystemMedia {
+                    command: "prev_track".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_5".to_string(),
+            KeyAssignment {
+                key_id: "numpad_5".to_string(),
                 label: "Spotify".to_string(),
                 icon: "spotify".to_string(),
                 color: Some("#1DB954".to_string()),
                 action: Some(ActionConfig::OpenPath {
                     path: "spotify:".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_6".to_string(),
+            KeyAssignment {
+                key_id: "numpad_6".to_string(),
+                label: "Next Track".to_string(),
+                icon: "SkipForward".to_string(),
+                color: Some("#1DB954".to_string()),
+                action: Some(ActionConfig::SystemMedia {
+                    command: "next_track".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_1".to_string(),
+            KeyAssignment {
+                key_id: "numpad_1".to_string(),
+                label: "Game Bar".to_string(),
+                icon: "Camera".to_string(),
+                color: Some("#10B981".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["win".to_string()],
+                    key: "G".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_2".to_string(),
+            KeyAssignment {
+                key_id: "numpad_2".to_string(),
+                label: "Screenshot".to_string(),
+                icon: "Camera".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["win".to_string(), "shift".to_string()],
+                    key: "S".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_3".to_string(),
+            KeyAssignment {
+                key_id: "numpad_3".to_string(),
+                label: "Deafen".to_string(),
+                icon: "VolumeX".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+                    key: "D".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_0".to_string(),
+            KeyAssignment {
+                key_id: "numpad_0".to_string(),
+                label: "GG WP".to_string(),
+                icon: "Clipboard".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::TypeText {
+                    text: "Good game everyone! Well played.".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_decimal".to_string(),
+            KeyAssignment {
+                key_id: "numpad_decimal".to_string(),
+                label: "Perf Overlay".to_string(),
+                icon: "Activity".to_string(),
+                color: Some("#E9B86A".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+                    key: "O".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_enter".to_string(),
+            KeyAssignment {
+                key_id: "numpad_enter".to_string(),
+                label: "Task Manager".to_string(),
+                icon: "Activity".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+                    key: "ESCAPE".to_string(),
                 }),
             },
         );
@@ -407,6 +582,68 @@ impl ConfigManager {
 
     fn create_coding_profile() -> Profile {
         let mut keys = HashMap::new();
+        keys.insert(
+            "numpad_numlock".to_string(),
+            KeyAssignment {
+                key_id: "numpad_numlock".to_string(),
+                label: "Deck Toggle".to_string(),
+                icon: "Power".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::ToggleDeckMode),
+            },
+        );
+        keys.insert(
+            "numpad_divide".to_string(),
+            KeyAssignment {
+                key_id: "numpad_divide".to_string(),
+                label: "Format Code".to_string(),
+                icon: "FileText".to_string(),
+                color: Some("#4EC9B0".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["shift".to_string(), "alt".to_string()],
+                    key: "F".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_multiply".to_string(),
+            KeyAssignment {
+                key_id: "numpad_multiply".to_string(),
+                label: "Save All".to_string(),
+                icon: "Layers".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+                    key: "S".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_subtract".to_string(),
+            KeyAssignment {
+                key_id: "numpad_subtract".to_string(),
+                label: "Run / Debug".to_string(),
+                icon: "PlayPause".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec![],
+                    key: "F5".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_add".to_string(),
+            KeyAssignment {
+                key_id: "numpad_add".to_string(),
+                label: "Terminal Pane".to_string(),
+                icon: "terminal".to_string(),
+                color: Some("#4EC9B0".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "`".to_string(),
+                }),
+            },
+        );
         keys.insert(
             "numpad_7".to_string(),
             KeyAssignment {
@@ -437,12 +674,23 @@ impl ConfigManager {
             "numpad_9".to_string(),
             KeyAssignment {
                 key_id: "numpad_9".to_string(),
-                label: "Visual Studio".to_string(),
-                icon: "visualstudio".to_string(),
-                color: Some("#865FC5".to_string()),
-                action: Some(ActionConfig::LaunchApp {
-                    path: "devenv.exe".to_string(),
-                    arguments: None,
+                label: "GitHub".to_string(),
+                icon: "github".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "https://github.com".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_4".to_string(),
+            KeyAssignment {
+                key_id: "numpad_4".to_string(),
+                label: "Localhost".to_string(),
+                icon: "chrome".to_string(),
+                color: Some("#4285F4".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "http://localhost:3000".to_string(),
                 }),
             },
         );
@@ -450,11 +698,97 @@ impl ConfigManager {
             "numpad_5".to_string(),
             KeyAssignment {
                 key_id: "numpad_5".to_string(),
-                label: "Firefox Dev".to_string(),
-                icon: "firefox".to_string(),
-                color: Some("#FF7139".to_string()),
-                action: Some(ActionConfig::OpenPath {
-                    path: "https://localhost:3000".to_string(),
+                label: "Git Status".to_string(),
+                icon: "terminal".to_string(),
+                color: Some("#E9B86A".to_string()),
+                action: Some(ActionConfig::TypeText {
+                    text: "git status\n".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_6".to_string(),
+            KeyAssignment {
+                key_id: "numpad_6".to_string(),
+                label: "Git Pull".to_string(),
+                icon: "terminal".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::TypeText {
+                    text: "git pull\n".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_1".to_string(),
+            KeyAssignment {
+                key_id: "numpad_1".to_string(),
+                label: "Commit Feat".to_string(),
+                icon: "Clipboard".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::TypeText {
+                    text: "feat: ".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_2".to_string(),
+            KeyAssignment {
+                key_id: "numpad_2".to_string(),
+                label: "Commit Fix".to_string(),
+                icon: "Clipboard".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::TypeText {
+                    text: "fix: ".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_3".to_string(),
+            KeyAssignment {
+                key_id: "numpad_3".to_string(),
+                label: "Console Log".to_string(),
+                icon: "Clipboard".to_string(),
+                color: Some("#E9B86A".to_string()),
+                action: Some(ActionConfig::TypeText {
+                    text: "console.log();".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_0".to_string(),
+            KeyAssignment {
+                key_id: "numpad_0".to_string(),
+                label: "Toggle Comment".to_string(),
+                icon: "FileText".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "/".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_decimal".to_string(),
+            KeyAssignment {
+                key_id: "numpad_decimal".to_string(),
+                label: "Command Palette".to_string(),
+                icon: "Command".to_string(),
+                color: Some("#007ACC".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+                    key: "P".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_enter".to_string(),
+            KeyAssignment {
+                key_id: "numpad_enter".to_string(),
+                label: "Run Dev".to_string(),
+                icon: "PlayPause".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::TypeText {
+                    text: "npm run dev\n".to_string(),
                 }),
             },
         );
@@ -471,6 +805,68 @@ impl ConfigManager {
 
     fn create_editing_profile() -> Profile {
         let mut keys = HashMap::new();
+        keys.insert(
+            "numpad_numlock".to_string(),
+            KeyAssignment {
+                key_id: "numpad_numlock".to_string(),
+                label: "Deck Toggle".to_string(),
+                icon: "Power".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::ToggleDeckMode),
+            },
+        );
+        keys.insert(
+            "numpad_divide".to_string(),
+            KeyAssignment {
+                key_id: "numpad_divide".to_string(),
+                label: "Split Clip".to_string(),
+                icon: "Activity".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "K".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_multiply".to_string(),
+            KeyAssignment {
+                key_id: "numpad_multiply".to_string(),
+                label: "Play / Pause".to_string(),
+                icon: "PlayPause".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec![],
+                    key: "SPACE".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_subtract".to_string(),
+            KeyAssignment {
+                key_id: "numpad_subtract".to_string(),
+                label: "Zoom Out".to_string(),
+                icon: "Volume1".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec![],
+                    key: "-".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_add".to_string(),
+            KeyAssignment {
+                key_id: "numpad_add".to_string(),
+                label: "Zoom In".to_string(),
+                icon: "Volume2".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec![],
+                    key: "=".to_string(),
+                }),
+            },
+        );
         keys.insert(
             "numpad_7".to_string(),
             KeyAssignment {
@@ -511,6 +907,19 @@ impl ConfigManager {
             },
         );
         keys.insert(
+            "numpad_4".to_string(),
+            KeyAssignment {
+                key_id: "numpad_4".to_string(),
+                label: "Ripple Delete".to_string(),
+                icon: "Trash2".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["shift".to_string()],
+                    key: "DELETE".to_string(),
+                }),
+            },
+        );
+        keys.insert(
             "numpad_5".to_string(),
             KeyAssignment {
                 key_id: "numpad_5".to_string(),
@@ -520,6 +929,97 @@ impl ConfigManager {
                 action: Some(ActionConfig::LaunchApp {
                     path: "vlc.exe".to_string(),
                     arguments: None,
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_6".to_string(),
+            KeyAssignment {
+                key_id: "numpad_6".to_string(),
+                label: "Speed / Duration".to_string(),
+                icon: "Activity".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "R".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_1".to_string(),
+            KeyAssignment {
+                key_id: "numpad_1".to_string(),
+                label: "Mark In".to_string(),
+                icon: "SkipBack".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec![],
+                    key: "I".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_2".to_string(),
+            KeyAssignment {
+                key_id: "numpad_2".to_string(),
+                label: "Mark Out".to_string(),
+                icon: "SkipForward".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec![],
+                    key: "O".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_3".to_string(),
+            KeyAssignment {
+                key_id: "numpad_3".to_string(),
+                label: "Razor Tool".to_string(),
+                icon: "Activity".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec![],
+                    key: "C".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_0".to_string(),
+            KeyAssignment {
+                key_id: "numpad_0".to_string(),
+                label: "Select Tool".to_string(),
+                icon: "Command".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec![],
+                    key: "V".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_decimal".to_string(),
+            KeyAssignment {
+                key_id: "numpad_decimal".to_string(),
+                label: "Render Preview".to_string(),
+                icon: "PlayPause".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec![],
+                    key: "RETURN".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_enter".to_string(),
+            KeyAssignment {
+                key_id: "numpad_enter".to_string(),
+                label: "Export Media".to_string(),
+                icon: "Layers".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "M".to_string(),
                 }),
             },
         );
@@ -537,6 +1037,67 @@ impl ConfigManager {
     fn create_streaming_profile() -> Profile {
         let mut keys = HashMap::new();
         keys.insert(
+            "numpad_numlock".to_string(),
+            KeyAssignment {
+                key_id: "numpad_numlock".to_string(),
+                label: "Deck Toggle".to_string(),
+                icon: "Power".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::ToggleDeckMode),
+            },
+        );
+        keys.insert(
+            "numpad_divide".to_string(),
+            KeyAssignment {
+                key_id: "numpad_divide".to_string(),
+                label: "Mic Mute".to_string(),
+                icon: "VolumeX".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+                    key: "M".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_multiply".to_string(),
+            KeyAssignment {
+                key_id: "numpad_multiply".to_string(),
+                label: "Play / Pause".to_string(),
+                icon: "PlayPause".to_string(),
+                color: Some("#10B981".to_string()),
+                action: Some(ActionConfig::SystemMedia {
+                    command: "play_pause".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_subtract".to_string(),
+            KeyAssignment {
+                key_id: "numpad_subtract".to_string(),
+                label: "Stop Record".to_string(),
+                icon: "Activity".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "F10".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_add".to_string(),
+            KeyAssignment {
+                key_id: "numpad_add".to_string(),
+                label: "Start Record".to_string(),
+                icon: "Activity".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "F9".to_string(),
+                }),
+            },
+        );
+        keys.insert(
             "numpad_7".to_string(),
             KeyAssignment {
                 key_id: "numpad_7".to_string(),
@@ -553,6 +1114,30 @@ impl ConfigManager {
             "numpad_8".to_string(),
             KeyAssignment {
                 key_id: "numpad_8".to_string(),
+                label: "Twitch".to_string(),
+                icon: "twitch".to_string(),
+                color: Some("#9146FF".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "https://dashboard.twitch.tv".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_9".to_string(),
+            KeyAssignment {
+                key_id: "numpad_9".to_string(),
+                label: "YouTube Studio".to_string(),
+                icon: "youtube".to_string(),
+                color: Some("#FF0000".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "https://studio.youtube.com".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_4".to_string(),
+            KeyAssignment {
+                key_id: "numpad_4".to_string(),
                 label: "Discord".to_string(),
                 icon: "discord".to_string(),
                 color: Some("#5865F2".to_string()),
@@ -562,14 +1147,104 @@ impl ConfigManager {
             },
         );
         keys.insert(
-            "numpad_9".to_string(),
+            "numpad_5".to_string(),
             KeyAssignment {
-                key_id: "numpad_9".to_string(),
-                label: "Spotify".to_string(),
-                icon: "spotify".to_string(),
-                color: Some("#1DB954".to_string()),
-                action: Some(ActionConfig::OpenPath {
-                    path: "spotify:".to_string(),
+                key_id: "numpad_5".to_string(),
+                label: "Scene 1".to_string(),
+                icon: "Camera".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "F1".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_6".to_string(),
+            KeyAssignment {
+                key_id: "numpad_6".to_string(),
+                label: "Scene 2".to_string(),
+                icon: "Layers".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "F2".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_1".to_string(),
+            KeyAssignment {
+                key_id: "numpad_1".to_string(),
+                label: "Webcam Toggle".to_string(),
+                icon: "Camera".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "F5".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_2".to_string(),
+            KeyAssignment {
+                key_id: "numpad_2".to_string(),
+                label: "Starting Screen".to_string(),
+                icon: "Layers".to_string(),
+                color: Some("#E9B86A".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "F3".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_3".to_string(),
+            KeyAssignment {
+                key_id: "numpad_3".to_string(),
+                label: "BRB Screen".to_string(),
+                icon: "Activity".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "F4".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_0".to_string(),
+            KeyAssignment {
+                key_id: "numpad_0".to_string(),
+                label: "Thanks Chat".to_string(),
+                icon: "Clipboard".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::TypeText {
+                    text: "Thanks for watching the stream! Don't forget to follow!".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_decimal".to_string(),
+            KeyAssignment {
+                key_id: "numpad_decimal".to_string(),
+                label: "Mute All".to_string(),
+                icon: "VolumeX".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::SystemMedia {
+                    command: "mute".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_enter".to_string(),
+            KeyAssignment {
+                key_id: "numpad_enter".to_string(),
+                label: "Go Live".to_string(),
+                icon: "PlayPause".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string()],
+                    key: "F12".to_string(),
                 }),
             },
         );
@@ -583,7 +1258,232 @@ impl ConfigManager {
             app_association: Some("obs64.exe".to_string()),
         }
     }
+
+    fn create_productivity_profile() -> Profile {
+        let mut keys = HashMap::new();
+        keys.insert(
+            "numpad_numlock".to_string(),
+            KeyAssignment {
+                key_id: "numpad_numlock".to_string(),
+                label: "Deck Toggle".to_string(),
+                icon: "Power".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::ToggleDeckMode),
+            },
+        );
+        keys.insert(
+            "numpad_divide".to_string(),
+            KeyAssignment {
+                key_id: "numpad_divide".to_string(),
+                label: "Mute Mic".to_string(),
+                icon: "VolumeX".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::SystemMedia {
+                    command: "mute".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_multiply".to_string(),
+            KeyAssignment {
+                key_id: "numpad_multiply".to_string(),
+                label: "Play / Pause".to_string(),
+                icon: "PlayPause".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::SystemMedia {
+                    command: "play_pause".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_subtract".to_string(),
+            KeyAssignment {
+                key_id: "numpad_subtract".to_string(),
+                label: "Snap Left".to_string(),
+                icon: "Layers".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["win".to_string()],
+                    key: "LEFT".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_add".to_string(),
+            KeyAssignment {
+                key_id: "numpad_add".to_string(),
+                label: "Snap Right".to_string(),
+                icon: "Layers".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["win".to_string()],
+                    key: "RIGHT".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_7".to_string(),
+            KeyAssignment {
+                key_id: "numpad_7".to_string(),
+                label: "Notion".to_string(),
+                icon: "notion".to_string(),
+                color: Some("#F1F5F9".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "https://www.notion.so".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_8".to_string(),
+            KeyAssignment {
+                key_id: "numpad_8".to_string(),
+                label: "Calendar".to_string(),
+                icon: "calendar".to_string(),
+                color: Some("#4285F4".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "https://calendar.google.com".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_9".to_string(),
+            KeyAssignment {
+                key_id: "numpad_9".to_string(),
+                label: "Email".to_string(),
+                icon: "mail".to_string(),
+                color: Some("#EA4335".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "https://mail.google.com".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_4".to_string(),
+            KeyAssignment {
+                key_id: "numpad_4".to_string(),
+                label: "Calculator".to_string(),
+                icon: "Calculator".to_string(),
+                color: Some("#E9B86A".to_string()),
+                action: Some(ActionConfig::LaunchApp {
+                    path: "calc.exe".to_string(),
+                    arguments: None,
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_5".to_string(),
+            KeyAssignment {
+                key_id: "numpad_5".to_string(),
+                label: "Google Drive".to_string(),
+                icon: "drive".to_string(),
+                color: Some("#34A853".to_string()),
+                action: Some(ActionConfig::OpenPath {
+                    path: "https://drive.google.com".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_6".to_string(),
+            KeyAssignment {
+                key_id: "numpad_6".to_string(),
+                label: "Notepad".to_string(),
+                icon: "notepad".to_string(),
+                color: Some("#0078D7".to_string()),
+                action: Some(ActionConfig::LaunchApp {
+                    path: "notepad.exe".to_string(),
+                    arguments: None,
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_1".to_string(),
+            KeyAssignment {
+                key_id: "numpad_1".to_string(),
+                label: "Screenshot".to_string(),
+                icon: "Camera".to_string(),
+                color: Some("#397BFF".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["win".to_string(), "shift".to_string()],
+                    key: "S".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_2".to_string(),
+            KeyAssignment {
+                key_id: "numpad_2".to_string(),
+                label: "Task Manager".to_string(),
+                icon: "Activity".to_string(),
+                color: Some("#ED7777".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+                    key: "ESCAPE".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_3".to_string(),
+            KeyAssignment {
+                key_id: "numpad_3".to_string(),
+                label: "Lock PC".to_string(),
+                icon: "Lock".to_string(),
+                color: Some("#64748B".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["win".to_string()],
+                    key: "L".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_0".to_string(),
+            KeyAssignment {
+                key_id: "numpad_0".to_string(),
+                label: "Email Signoff".to_string(),
+                icon: "Clipboard".to_string(),
+                color: Some("#65C991".to_string()),
+                action: Some(ActionConfig::TypeText {
+                    text: "Best regards,\nNaveen".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_decimal".to_string(),
+            KeyAssignment {
+                key_id: "numpad_decimal".to_string(),
+                label: "Settings".to_string(),
+                icon: "Settings".to_string(),
+                color: Some("#929CAC".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["win".to_string()],
+                    key: "I".to_string(),
+                }),
+            },
+        );
+        keys.insert(
+            "numpad_enter".to_string(),
+            KeyAssignment {
+                key_id: "numpad_enter".to_string(),
+                label: "Maximize".to_string(),
+                icon: "Command".to_string(),
+                color: Some("#4EC9B0".to_string()),
+                action: Some(ActionConfig::Hotkey {
+                    modifiers: vec!["win".to_string()],
+                    key: "UP".to_string(),
+                }),
+            },
+        );
+
+        Profile {
+            id: "productivity".to_string(),
+            name: "Productivity".to_string(),
+            icon: "Briefcase".to_string(),
+            keys,
+            folders: vec![],
+            app_association: Some("excel.exe".to_string()),
+        }
+    }
 }
+
 #[cfg(test)]
 mod config_tests {
     use super::*;
@@ -591,13 +1491,14 @@ mod config_tests {
     #[test]
     fn test_default_profiles_exist() {
         let data = ConfigManager::create_default_data();
-        assert_eq!(data.profiles.len(), 5);
+        assert_eq!(data.profiles.len(), 6);
         let ids: Vec<&str> = data.profiles.iter().map(|p| p.id.as_str()).collect();
         assert!(ids.contains(&"general"));
         assert!(ids.contains(&"gaming"));
         assert!(ids.contains(&"coding"));
         assert!(ids.contains(&"editing"));
         assert!(ids.contains(&"streaming"));
+        assert!(ids.contains(&"productivity"));
 
         let general = data.profiles.iter().find(|p| p.id == "general").unwrap();
         assert!(general.keys.contains_key("numpad_7"));

@@ -143,6 +143,7 @@ export const App: React.FC = () => {
   const [isCalibrationOpen, setIsCalibrationOpen] = useState(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<string | null>(null);
+  const [copiedAssignment, setCopiedAssignment] = useState<Omit<KeyAssignment, 'key_id'> | null>(null);
 
   // 1. Initial Load from Tauri Backend
   useEffect(() => {
@@ -177,6 +178,7 @@ export const App: React.FC = () => {
     let unlistenProfile: (() => void) | undefined;
     let unlistenFolder: (() => void) | undefined;
     let unlistenEmergency: (() => void) | undefined;
+    let unlistenProfilesUpdated: (() => void) | undefined;
 
     const setupListeners = async () => {
       unlistenMode = await listen<boolean>('deck-mode-changed', (e) => {
@@ -217,6 +219,15 @@ export const App: React.FC = () => {
         setBannerNotice('Emergency Disarm: Deck Mode deactivated.');
         setTimeout(() => setBannerNotice(null), 5000);
       });
+
+      unlistenProfilesUpdated = await listen<Profile[]>('profiles-updated', (e) => {
+        if (appData) {
+          setAppData({
+            ...appData,
+            profiles: e.payload,
+          });
+        }
+      });
     };
 
     setupListeners();
@@ -235,6 +246,7 @@ export const App: React.FC = () => {
       if (unlistenProfile) unlistenProfile();
       if (unlistenFolder) unlistenFolder();
       if (unlistenEmergency) unlistenEmergency();
+      if (unlistenProfilesUpdated) unlistenProfilesUpdated();
       clearInterval(interval);
     };
   }, [appData]);
@@ -435,6 +447,30 @@ export const App: React.FC = () => {
   const currentAssignments = currentProfile?.keys || {};
   const selectedAssignment = selectedKeyId ? currentAssignments[selectedKeyId] : undefined;
 
+  const handleCopyAction = () => {
+    if (selectedAssignment && selectedAssignment.action) {
+      setCopiedAssignment({
+        label: selectedAssignment.label,
+        icon: selectedAssignment.icon,
+        color: selectedAssignment.color,
+        action: selectedAssignment.action,
+      });
+      setBannerNotice(`Copied action "${selectedAssignment.label}"`);
+      setTimeout(() => setBannerNotice(null), 2500);
+    }
+  };
+
+  const handlePasteAction = () => {
+    if (copiedAssignment && selectedKeyId) {
+      handleSaveKeyAssignment({
+        key_id: selectedKeyId,
+        ...copiedAssignment,
+      });
+      setBannerNotice(`Pasted "${copiedAssignment.label}" to key`);
+      setTimeout(() => setBannerNotice(null), 2500);
+    }
+  };
+
   return (
     <div className="flex h-screen w-screen bg-[#08090C] text-[#F1F5F9] overflow-hidden select-none">
       {/* 3-Tab Stream Deck Sidebar */}
@@ -511,6 +547,9 @@ export const App: React.FC = () => {
               <KeyInspector
                 selectedKeyId={selectedKeyId}
                 assignment={selectedAssignment}
+                copiedAssignment={copiedAssignment}
+                onCopyAction={handleCopyAction}
+                onPasteAction={handlePasteAction}
                 onEditAction={() => setIsActionModalOpen(true)}
                 onRemoveAction={handleRemoveKeyAssignment}
                 onTestAction={handleTestAction}

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Profile } from '../types';
 import { IconRenderer } from './IconRenderer';
+import { invoke } from '@tauri-apps/api/core';
 import { 
   X, 
   Plus, 
@@ -11,7 +12,8 @@ import {
   Layers,
   Download,
   Upload,
-  AppWindow
+  AppWindow,
+  RotateCcw
 } from 'lucide-react';
 
 interface ProfilesModalProps {
@@ -21,6 +23,8 @@ interface ProfilesModalProps {
   onSaveProfiles: (profiles: Profile[]) => void;
   onClose: () => void;
 }
+
+const DEFAULT_PROFILE_IDS = ['general', 'gaming', 'coding', 'streaming', 'editing', 'productivity'];
 
 export const ProfilesModal: React.FC<ProfilesModalProps> = ({
   profiles,
@@ -108,6 +112,32 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
     onSaveProfiles(updated);
     setEditingId(null);
     showNotice('Profile updated');
+  };
+
+  const handleResetProfile = async (id: string) => {
+    try {
+      const defaultProfile = await invoke<Profile>('reset_profile_to_default', { profileId: id });
+      const updated = profileList.map((p) => (p.id === id ? defaultProfile : p));
+      setProfileList(updated);
+      onSaveProfiles(updated);
+      showNotice(`Reset "${defaultProfile.name}" to defaults`);
+    } catch (e) {
+      console.warn('Reset profile failed (falling back):', e);
+    }
+  };
+
+  const handleResetAllProfiles = async () => {
+    if (!window.confirm('Reset all profiles to factory defaults? Any custom assignments will be overwritten.')) {
+      return;
+    }
+    try {
+      const defaults = await invoke<Profile[]>('reset_all_profiles_to_default');
+      setProfileList(defaults);
+      onSaveProfiles(defaults);
+      showNotice('All profiles reset to factory defaults');
+    } catch (e) {
+      console.warn('Reset all profiles failed:', e);
+    }
   };
 
   // Export single profile
@@ -319,6 +349,16 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
                         <Copy size={13} />
                       </button>
 
+                      {DEFAULT_PROFILE_IDS.includes(p.id) && (
+                        <button
+                          onClick={() => handleResetProfile(p.id)}
+                          className="p-1.5 rounded-lg text-[#94A3B8] hover:text-[#3B82F6] hover:bg-[#182030] cursor-pointer"
+                          title={`Reset "${p.name}" to factory default layout`}
+                        >
+                          <RotateCcw size={13} />
+                        </button>
+                      )}
+
                       {profileList.length > 1 && (
                         confirmDeleteId === p.id ? (
                           <div className="flex items-center gap-1 bg-[#EF4444]/15 border border-[#EF4444]/40 px-2 py-0.5 rounded-lg">
@@ -381,6 +421,15 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
             >
               <Download size={13} />
               <span>Export All</span>
+            </button>
+
+            <button
+              onClick={handleResetAllProfiles}
+              className="py-1.5 px-3 rounded-lg bg-[#181E2C] hover:bg-[#222B3E] text-[#94A3B8] hover:text-[#EF4444] text-xs font-semibold flex items-center gap-1.5 border border-[#202736] cursor-pointer"
+              title="Reset all profiles to factory defaults"
+            >
+              <RotateCcw size={13} />
+              <span>Reset Defaults</span>
             </button>
 
             <input
