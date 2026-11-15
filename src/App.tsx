@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AppData, EngineMode, KeyAssignment, ActionConfig, CalibrationProfile, Profile, domEventToNumpadKeyId, NavTab } from './types';
+import { 
+  AppData, 
+  EngineMode, 
+  KeyAssignment, 
+  ActionConfig, 
+  CalibrationProfile, 
+  Profile, 
+  domEventToNumpadKeyId, 
+  NavTab,
+  KeyboardDeviceInfo 
+} from './types';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -136,6 +146,8 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('deck');
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>('numpad_7');
   const [activeTriggeredKeyId, setActiveTriggeredKeyId] = useState<string | null>(null);
+  const [connectedKeyboards, setConnectedKeyboards] = useState<KeyboardDeviceInfo[]>([]);
+  const [isDetectingKeyboard, setIsDetectingKeyboard] = useState<boolean>(false);
 
   // Modals
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
@@ -144,6 +156,34 @@ export const App: React.FC = () => {
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
   const [bannerNotice, setBannerNotice] = useState<string | null>(null);
   const [copiedAssignment, setCopiedAssignment] = useState<Omit<KeyAssignment, 'key_id'> | null>(null);
+
+  const refreshConnectedKeyboards = async () => {
+    try {
+      const kbs = await invoke<KeyboardDeviceInfo[]>('get_connected_keyboards');
+      setConnectedKeyboards(kbs);
+    } catch (err) {
+      console.warn('Failed to get connected keyboards:', err);
+    }
+  };
+
+  const handleStartDetectingKeyboard = async () => {
+    setIsDetectingKeyboard(true);
+    try {
+      await invoke('start_detecting_keyboard');
+    } catch (err) {
+      console.error('Failed to start detecting keyboard:', err);
+      setIsDetectingKeyboard(false);
+    }
+  };
+
+  const handleStopDetectingKeyboard = async () => {
+    setIsDetectingKeyboard(false);
+    try {
+      await invoke('stop_detecting_keyboard');
+    } catch (err) {
+      console.error('Failed to stop detecting keyboard:', err);
+    }
+  };
 
   // 1. Initial Load from Tauri Backend
   useEffect(() => {
@@ -155,6 +195,8 @@ export const App: React.FC = () => {
 
         const nlState = await invoke<boolean>('get_numlock_state');
         setNumLockOn(nlState);
+
+        await refreshConnectedKeyboards();
 
         // Show onboarding only if never seen / completed
         if (!data.calibration?.is_completed) {
@@ -179,6 +221,7 @@ export const App: React.FC = () => {
     let unlistenFolder: (() => void) | undefined;
     let unlistenEmergency: (() => void) | undefined;
     let unlistenProfilesUpdated: (() => void) | undefined;
+    let unlistenKeyboardDetected: (() => void) | undefined;
 
     const setupListeners = async () => {
       unlistenMode = await listen<boolean>('deck-mode-changed', (e) => {
@@ -228,6 +271,22 @@ export const App: React.FC = () => {
           });
         }
       });
+
+      unlistenKeyboardDetected = await listen<KeyboardDeviceInfo>('keyboard-device-detected', (e) => {
+        const detected = e.payload;
+        setIsDetectingKeyboard(false);
+        setAppData((prev) => {
+          if (!prev) return prev;
+          const updated = {
+            ...prev,
+            settings: { ...prev.settings, target_keyboard_device: detected.id },
+          };
+          invoke('save_settings', { settings: updated.settings });
+          return updated;
+        });
+        setBannerNotice(`Target keyboard isolated: ${detected.name}`);
+        setTimeout(() => setBannerNotice(null), 5000);
+      });
     };
 
     setupListeners();
@@ -247,6 +306,7 @@ export const App: React.FC = () => {
       if (unlistenFolder) unlistenFolder();
       if (unlistenEmergency) unlistenEmergency();
       if (unlistenProfilesUpdated) unlistenProfilesUpdated();
+      if (unlistenKeyboardDetected) unlistenKeyboardDetected();
       clearInterval(interval);
     };
   }, [appData]);
@@ -518,6 +578,8 @@ export const App: React.FC = () => {
               numLockOn={numLockOn}
               isCalibrated={!!appData.calibration?.is_completed}
               onOpenCalibration={() => setIsCalibrationOpen(true)}
+              targetKeyboardDevice={appData.settings.target_keyboard_device}
+              connectedKeyboards={connectedKeyboards}
             />
 
             {/* Notification Banner */}
@@ -570,6 +632,11 @@ export const App: React.FC = () => {
             numLockOn={numLockOn}
             onOpenCalibration={() => setIsCalibrationOpen(true)}
             onResetCalibration={handleResetCalibration}
+            connectedKeyboards={connectedKeyboards}
+            onRefreshKeyboards={refreshConnectedKeyboards}
+            isDetectingKeyboard={isDetectingKeyboard}
+            onStartDetectingKeyboard={handleStartDetectingKeyboard}
+            onStopDetectingKeyboard={handleStopDetectingKeyboard}
           />
         )}
       </div>

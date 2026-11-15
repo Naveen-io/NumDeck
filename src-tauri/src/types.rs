@@ -356,6 +356,16 @@ pub struct Profile {
     pub app_association: Option<String>,
 }
 
+/// Physical keyboard device enumerated via Windows Raw Input
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct KeyboardDeviceInfo {
+    pub id: String,
+    pub name: String,
+    pub raw_path: String,
+    pub is_internal: bool,
+    pub is_virtual: bool,
+}
+
 /// Global Application Settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
@@ -366,6 +376,8 @@ pub struct AppSettings {
     pub sound_feedback: bool,
     pub run_at_startup: bool,
     pub minimize_to_tray: bool,
+    #[serde(default)]
+    pub target_keyboard_device: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -378,6 +390,7 @@ impl Default for AppSettings {
             sound_feedback: true,
             run_at_startup: false,
             minimize_to_tray: false,
+            target_keyboard_device: None,
         }
     }
 }

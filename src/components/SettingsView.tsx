@@ -6,9 +6,14 @@ import {
   Info, 
   RotateCcw, 
   CheckCircle2, 
-  Check
+  Check,
+  RefreshCw,
+  Crosshair,
+  Radio,
+  Usb,
+  Laptop
 } from 'lucide-react';
-import { AppSettings, CalibrationProfile } from '../types';
+import { AppSettings, CalibrationProfile, KeyboardDeviceInfo } from '../types';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -17,6 +22,11 @@ interface SettingsViewProps {
   numLockOn: boolean;
   onOpenCalibration: () => void;
   onResetCalibration: () => void;
+  connectedKeyboards?: KeyboardDeviceInfo[];
+  onRefreshKeyboards?: () => void;
+  isDetectingKeyboard?: boolean;
+  onStartDetectingKeyboard?: () => void;
+  onStopDetectingKeyboard?: () => void;
 }
 
 type SettingsSection = 'general' | 'input' | 'appearance' | 'about';
@@ -28,6 +38,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   numLockOn,
   onOpenCalibration,
   onResetCalibration,
+  connectedKeyboards = [],
+  onRefreshKeyboards,
+  isDetectingKeyboard = false,
+  onStartDetectingKeyboard,
+  onStopDetectingKeyboard,
 }) => {
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
@@ -234,6 +249,98 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <span className="font-bold text-[#F1F5F9]">
                       {isCalibratedCustom ? 'Custom Calibrated' : 'Standard Factory Defaults'}
                     </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Target Keyboard Filter (Device Isolation) */}
+              <div className="p-5 rounded-xl bg-[#111520] border border-[#202736] space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-[#F1F5F9]">Target Keyboard (Device Isolation)</h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/30">
+                        {settings.target_keyboard_device && settings.target_keyboard_device !== 'all' ? 'Isolated' : 'All Keyboards'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#94A3B8] leading-relaxed">
+                      Choose which physical keyboard NumDeck intercepts. If you use a separate USB numeric keypad, select it here so your main laptop/desktop keyboard types normally and is never suppressed.
+                    </p>
+                  </div>
+
+                  {onRefreshKeyboards && (
+                    <button
+                      onClick={onRefreshKeyboards}
+                      className="p-2 rounded-lg bg-[#182030] hover:bg-[#202B40] border border-[#2B3A54] text-[#94A3B8] hover:text-[#F1F5F9] cursor-pointer shrink-0 transition-colors"
+                      title="Rescan connected keyboards"
+                    >
+                      <RefreshCw size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 relative">
+                      <select
+                        value={settings.target_keyboard_device || 'all'}
+                        onChange={(e) => updateSetting('target_keyboard_device', e.target.value === 'all' ? undefined : e.target.value)}
+                        className="w-full bg-[#0C0F17] hover:bg-[#131722] border border-[#2B3A54] focus:border-[#3B82F6] rounded-lg px-3 py-2 text-xs font-semibold text-[#F1F5F9] cursor-pointer focus:outline-none transition-colors"
+                      >
+                        <option value="all">All Keyboards (Default — Any connected keypad)</option>
+                        {connectedKeyboards.map((kb) => (
+                          <option key={kb.id} value={kb.id}>
+                            {kb.name} {kb.is_internal ? '— Laptop' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {isDetectingKeyboard ? (
+                      <button
+                        onClick={onStopDetectingKeyboard}
+                        className="py-2 px-3.5 rounded-lg bg-[#EF4444] hover:bg-[#DC2626] text-white text-xs font-bold cursor-pointer shrink-0 animate-pulse flex items-center gap-1.5"
+                      >
+                        <Radio size={13} className="animate-spin" />
+                        <span>Tap any key on numpad... (Cancel)</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={onStartDetectingKeyboard}
+                        className="py-2 px-3.5 rounded-lg bg-[#1D4ED8] hover:bg-[#2563EB] border border-[#3B82F6] text-white text-xs font-bold cursor-pointer shrink-0 flex items-center gap-1.5 transition-colors"
+                        title="Press any key on your numpad to detect and select it"
+                      >
+                        <Crosshair size={13} />
+                        <span>Detect Keypad</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Connected devices summary */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-[11px] text-[#64748B] font-medium">Connected hardware:</span>
+                    {connectedKeyboards.length === 0 ? (
+                      <span className="text-[11px] text-[#94A3B8] italic">Scanning USB ports...</span>
+                    ) : (
+                      connectedKeyboards.map((kb) => {
+                        const isSelected = settings.target_keyboard_device === kb.id;
+                        return (
+                          <button
+                            key={kb.id}
+                            onClick={() => updateSetting('target_keyboard_device', isSelected ? undefined : kb.id)}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border cursor-pointer transition-all ${
+                              isSelected
+                                ? 'bg-[#3B82F6]/20 border-[#3B82F6] text-[#60A5FA]'
+                                : 'bg-[#0C0F17] border-[#1E2535] text-[#94A3B8] hover:border-[#2B3A54] hover:text-[#F1F5F9]'
+                            }`}
+                          >
+                            {kb.is_internal ? <Laptop size={11} /> : <Usb size={11} />}
+                            <span>{kb.name}</span>
+                            {isSelected && <Check size={11} className="text-[#3B82F6] ml-0.5" />}
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
               </div>

@@ -61,6 +61,14 @@ export interface Profile {
   app_association?: string;
 }
 
+export interface KeyboardDeviceInfo {
+  id: string;
+  name: string;
+  raw_path: string;
+  is_internal: boolean;
+  is_virtual: boolean;
+}
+
 export interface AppSettings {
   deck_mode: boolean;
   active_profile_id: string;
@@ -69,6 +77,7 @@ export interface AppSettings {
   sound_feedback: boolean;
   run_at_startup: boolean;
   minimize_to_tray: boolean;
+  target_keyboard_device?: string;
 }
 
 export interface CalibrationProfile {

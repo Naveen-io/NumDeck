@@ -190,6 +190,7 @@ fn save_settings(
             .state()
             .sound_feedback
             .store(settings.sound_feedback, std::sync::atomic::Ordering::Relaxed);
+        *engine.state().target_keyboard_device.write() = settings.target_keyboard_device.clone();
     }
 
     if old_run_at_startup != settings.run_at_startup {
@@ -199,6 +200,23 @@ fn save_settings(
     }
 
     context.config_manager.save(&data)
+}
+
+#[command]
+fn get_connected_keyboards() -> Result<Vec<KeyboardDeviceInfo>, String> {
+    Ok(keyboard::enumerate_keyboards())
+}
+
+#[command]
+fn start_detecting_keyboard() -> Result<(), String> {
+    keyboard::start_detecting_keyboard();
+    Ok(())
+}
+
+#[command]
+fn stop_detecting_keyboard() -> Result<(), String> {
+    keyboard::stop_detecting_keyboard();
+    Ok(())
 }
 
 #[command]
@@ -381,6 +399,7 @@ pub fn run() {
                 app_data.calibration.clone(),
                 active_profile,
                 app_data.settings.deck_mode,
+                app_data.settings.target_keyboard_device.clone(),
             );
 
             *app_context.engine.write() = Some(engine);
@@ -485,7 +504,10 @@ pub fn run() {
             test_action,
             browse_executable_file,
             extract_app_icon,
-            trigger_deck_key
+            trigger_deck_key,
+            get_connected_keyboards,
+            start_detecting_keyboard,
+            stop_detecting_keyboard
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

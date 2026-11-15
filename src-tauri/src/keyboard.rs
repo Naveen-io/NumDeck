@@ -2,11 +2,11 @@ use crate::actions::ActionExecutor;
 use crate::types::*;
 use crossbeam_channel::{Receiver, Sender};
 use parking_lot::RwLock;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -15,11 +15,18 @@ use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows_sys::Win32::System::Threading::{GetCurrentProcessId, GetCurrentThreadId};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
+use windows_sys::Win32::UI::Input::*;
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
 const LLKHF_EXTENDED_FLAG: u32 = 0x00000001;
 const LLKHF_INJECTED_FLAG: u32 = 0x00000010;
 const LLKHF_UP_FLAG: u32 = 0x00000080;
+
+// Global Raw Input sink window and device tracking
+static RAW_INPUT_HWND: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
+static LAST_HARDWARE_KEYBOARD: parking_lot::RwLock<Option<String>> = parking_lot::RwLock::new(None);
+static DETECTING_KEYBOARD: AtomicBool = AtomicBool::new(false);
+static DEVICE_HANDLE_CACHE: parking_lot::RwLock<Option<HashMap<isize, String>>> = parking_lot::RwLock::new(None);
 
 /// Diagnostic telemetry record capturing all 12 requested fields
 #[derive(Debug, Clone)]
@@ -51,6 +58,7 @@ pub enum WorkerMessage {
     Telemetry(TelemetryRecord),
     CalibrationKeyCaptured(KeySignature),
     EmergencyReset,
+    KeyboardDeviceDetected(String),
 }
 
 /// State shared between Tauri commands, Low-Level Hook, and Action Executor
@@ -65,10 +73,16 @@ pub struct KeyboardEngineState {
     pub esc_press_count: AtomicU32,
     pub last_esc_time: RwLock<Instant>,
     pub diagnostics_active: AtomicBool,
+    pub target_keyboard_device: RwLock<Option<String>>,
 }
 
 impl KeyboardEngineState {
-    pub fn new(calibration: CalibrationProfile, default_profile: Profile, initial_deck_mode: bool) -> Self {
+    pub fn new(
+        calibration: CalibrationProfile,
+        default_profile: Profile,
+        initial_deck_mode: bool,
+        target_keyboard_device: Option<String>,
+    ) -> Self {
         Self {
             mode: RwLock::new(if initial_deck_mode {
                 EngineMode::Deck
@@ -84,6 +98,197 @@ impl KeyboardEngineState {
             esc_press_count: AtomicU32::new(0),
             last_esc_time: RwLock::new(Instant::now()),
             diagnostics_active: AtomicBool::new(true),
+            target_keyboard_device: RwLock::new(target_keyboard_device),
+        }
+    }
+}
+
+pub fn start_detecting_keyboard() {
+    DETECTING_KEYBOARD.store(true, Ordering::SeqCst);
+}
+
+pub fn stop_detecting_keyboard() {
+    DETECTING_KEYBOARD.store(false, Ordering::SeqCst);
+}
+
+/// Enumerate all connected physical and virtual keyboards on Windows using Raw Input
+pub fn enumerate_keyboards() -> Vec<KeyboardDeviceInfo> {
+    let mut results = Vec::new();
+    unsafe {
+        let mut num_devices = 0u32;
+        let cb_size = std::mem::size_of::<RAWINPUTDEVICELIST>() as u32;
+        let _ = GetRawInputDeviceList(std::ptr::null_mut(), &mut num_devices, cb_size);
+        if num_devices == 0 {
+            return results;
+        }
+        let mut devices: Vec<RAWINPUTDEVICELIST> = vec![std::mem::zeroed(); num_devices as usize];
+        let count = GetRawInputDeviceList(devices.as_mut_ptr(), &mut num_devices, cb_size);
+        if count == u32::MAX {
+            return results;
+        }
+
+        let mut seen_ids = HashSet::new();
+
+        for dev in devices.iter().take(count as usize) {
+            if dev.dwType != RIM_TYPEKEYBOARD {
+                continue;
+            }
+            let mut name_size = 0u32;
+            GetRawInputDeviceInfoW(dev.hDevice, RIDI_DEVICENAME, std::ptr::null_mut(), &mut name_size);
+            if name_size == 0 {
+                continue;
+            }
+            let mut name_buf = vec![0u16; name_size as usize];
+            let read_len = GetRawInputDeviceInfoW(dev.hDevice, RIDI_DEVICENAME, name_buf.as_mut_ptr() as _, &mut name_size);
+            if read_len == u32::MAX {
+                continue;
+            }
+            let raw_path = String::from_utf16_lossy(&name_buf)
+                .trim_end_matches('\0')
+                .trim()
+                .to_string();
+
+            if raw_path.is_empty() {
+                continue;
+            }
+
+            let upper_path = raw_path.to_uppercase();
+            let is_virtual = upper_path.contains("MICROSOFT KEYBOARD RID") || upper_path.contains("ROOT#");
+            let is_internal = upper_path.contains("ACPI#MSFT") || upper_path.contains("PNP0303") || upper_path.contains("I8042PRT");
+
+            let id = if let Some(vid_idx) = upper_path.find("VID_") {
+                let from_vid = &upper_path[vid_idx..];
+                let end = if let Some(mi_idx) = from_vid.find("&MI_") {
+                    mi_idx
+                } else if let Some(hash_idx) = from_vid.find('#') {
+                    hash_idx
+                } else if let Some(slash_idx) = from_vid.find('/') {
+                    slash_idx
+                } else {
+                    from_vid.len()
+                };
+                from_vid[..end].to_string()
+            } else if is_internal {
+                "INTERNAL_KEYBOARD".to_string()
+            } else if is_virtual {
+                "VIRTUAL_KEYBOARD".to_string()
+            } else {
+                raw_path.clone()
+            };
+
+            // Avoid duplicate entries for composite device interfaces
+            if seen_ids.contains(&id) {
+                continue;
+            }
+            seen_ids.insert(id.clone());
+
+            let name = if is_internal {
+                "Internal Laptop Keyboard (Standard PS/2)".to_string()
+            } else if is_virtual {
+                "Virtual / Remote Desktop Keyboard".to_string()
+            } else if id.starts_with("VID_") {
+                let parts: Vec<&str> = id.split('&').collect();
+                let vid = parts.get(0).unwrap_or(&"VID_????").replace("VID_", "");
+                let pid = parts.get(1).unwrap_or(&"PID_????").replace("PID_", "");
+                format!("USB Keyboard / Numpad [VID: {}, PID: {}]", vid, pid)
+            } else {
+                format!("Keyboard Device [{}]", id)
+            };
+
+            results.push(KeyboardDeviceInfo {
+                id,
+                name,
+                raw_path,
+                is_internal,
+                is_virtual,
+            });
+        }
+    }
+
+    results.sort_by_key(|d| if d.is_virtual { 2 } else if d.is_internal { 1 } else { 0 });
+    results
+}
+
+/// Convert a device handle from Raw Input into a unique normalized device identifier
+fn resolve_device_id_from_handle(hdevice: HANDLE) -> String {
+    if hdevice.is_null() {
+        return "SYNTHETIC".to_string();
+    }
+    let key = hdevice as isize;
+    {
+        let cache = DEVICE_HANDLE_CACHE.read();
+        if let Some(ref map) = *cache {
+            if let Some(cached) = map.get(&key) {
+                return cached.clone();
+            }
+        }
+    }
+
+    let mut name_size = 0u32;
+    unsafe {
+        GetRawInputDeviceInfoW(hdevice, RIDI_DEVICENAME, std::ptr::null_mut(), &mut name_size);
+        if name_size > 0 {
+            let mut name_buf = vec![0u16; name_size as usize];
+            let read_len = GetRawInputDeviceInfoW(hdevice, RIDI_DEVICENAME, name_buf.as_mut_ptr() as _, &mut name_size);
+            if read_len != u32::MAX {
+                let raw_path = String::from_utf16_lossy(&name_buf)
+                    .trim_end_matches('\0')
+                    .trim()
+                    .to_uppercase();
+
+                let id = if let Some(vid_idx) = raw_path.find("VID_") {
+                    let from_vid = &raw_path[vid_idx..];
+                    let end = if let Some(mi_idx) = from_vid.find("&MI_") {
+                        mi_idx
+                    } else if let Some(hash_idx) = from_vid.find('#') {
+                        hash_idx
+                    } else if let Some(slash_idx) = from_vid.find('/') {
+                        slash_idx
+                    } else {
+                        from_vid.len()
+                    };
+                    from_vid[..end].to_string()
+                } else if raw_path.contains("ACPI#MSFT") || raw_path.contains("PNP0303") || raw_path.contains("I8042PRT") {
+                    "INTERNAL_KEYBOARD".to_string()
+                } else if raw_path.contains("MICROSOFT KEYBOARD RID") || raw_path.contains("ROOT#") {
+                    "VIRTUAL_KEYBOARD".to_string()
+                } else {
+                    raw_path
+                };
+
+                let mut cache = DEVICE_HANDLE_CACHE.write();
+                if cache.is_none() {
+                    *cache = Some(HashMap::new());
+                }
+                cache.as_mut().unwrap().insert(key, id.clone());
+                return id;
+            }
+        }
+    }
+    "UNKNOWN".to_string()
+}
+
+/// Process a WM_INPUT lParam, update the most recent hardware keyboard, and trigger detection if active
+fn process_raw_input_lparam(lparam: LPARAM, worker_tx: Option<&Sender<WorkerMessage>>) {
+    unsafe {
+        let mut size = std::mem::size_of::<RAWINPUT>() as u32;
+        let mut raw: RAWINPUT = std::mem::zeroed();
+        let res = GetRawInputData(
+            lparam as _,
+            RID_INPUT,
+            &mut raw as *mut _ as _,
+            &mut size,
+            std::mem::size_of::<RAWINPUTHEADER>() as u32,
+        );
+        if res != u32::MAX && raw.header.dwType == RIM_TYPEKEYBOARD {
+            let dev_id = resolve_device_id_from_handle(raw.header.hDevice);
+            *LAST_HARDWARE_KEYBOARD.write() = Some(dev_id.clone());
+
+            if DETECTING_KEYBOARD.swap(false, Ordering::SeqCst) {
+                if let Some(tx) = worker_tx {
+                    let _ = tx.send(WorkerMessage::KeyboardDeviceDetected(dev_id));
+                }
+            }
         }
     }
 }
@@ -108,8 +313,14 @@ impl KeyboardEngine {
         calibration: CalibrationProfile,
         default_profile: Profile,
         initial_deck_mode: bool,
+        target_keyboard_device: Option<String>,
     ) -> Self {
-        let state = Arc::new(KeyboardEngineState::new(calibration, default_profile, initial_deck_mode));
+        let state = Arc::new(KeyboardEngineState::new(
+            calibration,
+            default_profile,
+            initial_deck_mode,
+            target_keyboard_device,
+        ));
         let (worker_tx, worker_rx) = crossbeam_channel::unbounded::<WorkerMessage>();
         let hook_thread_id = Arc::new(AtomicU32::new(0));
 
@@ -287,12 +498,29 @@ impl KeyboardEngine {
                     let _ = app.emit("deck-mode-changed", false);
                     let _ = app.emit("emergency-reset", ());
                 }
+
+                WorkerMessage::KeyboardDeviceDetected(device_id) => {
+                    log::info!("Hardware keyboard device detected: {}", device_id);
+                    let keyboards = enumerate_keyboards();
+                    let detected = keyboards
+                        .iter()
+                        .find(|k| k.id.eq_ignore_ascii_case(&device_id) || k.raw_path.contains(&device_id))
+                        .cloned()
+                        .unwrap_or_else(|| KeyboardDeviceInfo {
+                            id: device_id.clone(),
+                            name: format!("Keyboard Device [{}]", device_id),
+                            raw_path: device_id.clone(),
+                            is_internal: device_id.contains("INTERNAL"),
+                            is_virtual: device_id.contains("VIRTUAL"),
+                        });
+                    let _ = app.emit("keyboard-device-detected", detected);
+                }
             }
         }
         log::info!("Off-thread action/telemetry worker terminated.");
     }
 
-    /// Dedicated hook thread running Windows message loop
+    /// Dedicated hook thread running Windows message loop with Raw Input Device Sink
     fn hook_thread_loop(thread_id_store: Arc<AtomicU32>) {
         unsafe {
             let tid = GetCurrentThreadId();
@@ -301,6 +529,35 @@ impl KeyboardEngine {
             // Correctly obtain current executable module handle for global WH_KEYBOARD_LL hook
             let hmod = GetModuleHandleW(std::ptr::null());
 
+            // 1. Create message-only window for Raw Input keyboard sink
+            let static_class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+            let raw_hwnd = CreateWindowExW(
+                0,
+                static_class.as_ptr(),
+                std::ptr::null(),
+                0,
+                0, 0, 0, 0,
+                HWND_MESSAGE,
+                0 as _,
+                hmod,
+                std::ptr::null(),
+            );
+
+            if raw_hwnd != 0 as _ {
+                RAW_INPUT_HWND.store(raw_hwnd as _, Ordering::SeqCst);
+                let rid = RAWINPUTDEVICE {
+                    usUsagePage: 1, // Generic Desktop Controls
+                    usUsage: 6,     // Keyboard
+                    dwFlags: RIDEV_INPUTSINK,
+                    hwndTarget: raw_hwnd,
+                };
+                let reg_res = RegisterRawInputDevices(&rid, 1, std::mem::size_of::<RAWINPUTDEVICE>() as u32);
+                log::info!("Raw Input keyboard sink registered on HWND {:?}: success={}", raw_hwnd, reg_res != 0);
+            } else {
+                log::warn!("Failed to create HWND_MESSAGE for Raw Input sink: {}", GetLastError());
+            }
+
+            // 2. Install low-level keyboard hook
             let hook = SetWindowsHookExW(
                 WH_KEYBOARD_LL,
                 Some(low_level_keyboard_proc),
@@ -310,6 +567,10 @@ impl KeyboardEngine {
 
             if hook.is_null() {
                 log::error!("Failed to install WH_KEYBOARD_LL hook! Error: {}", GetLastError());
+                if raw_hwnd != 0 as _ {
+                    DestroyWindow(raw_hwnd);
+                    RAW_INPUT_HWND.store(std::ptr::null_mut(), Ordering::SeqCst);
+                }
                 return;
             }
 
@@ -317,12 +578,21 @@ impl KeyboardEngine {
 
             let mut msg: MSG = std::mem::zeroed();
             while GetMessageW(&mut msg, 0 as _, 0, 0) > 0 {
+                if msg.message == WM_INPUT {
+                    let hook_guard = HOOK_DATA.read();
+                    let worker_tx = hook_guard.as_ref().map(|d| &d.worker_tx);
+                    process_raw_input_lparam(msg.lParam, worker_tx);
+                }
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
 
             log::info!("Unhooking WH_KEYBOARD_LL...");
             UnhookWindowsHookEx(hook);
+            if raw_hwnd != 0 as _ {
+                DestroyWindow(raw_hwnd);
+                RAW_INPUT_HWND.store(std::ptr::null_mut(), Ordering::SeqCst);
+            }
             log::info!("WH_KEYBOARD_LL cleanly unhooked.");
         }
     }
@@ -447,6 +717,56 @@ unsafe extern "system" fn low_level_keyboard_proc(
                     hook_data.state.esc_press_count.store(1, Ordering::SeqCst);
                 }
                 *last_time = now;
+            }
+        }
+
+        // Drain any pending Raw Input messages to update hardware device attribution
+        let raw_hwnd = RAW_INPUT_HWND.load(Ordering::Relaxed) as HWND;
+        if raw_hwnd != 0 as _ {
+            let mut raw_msg: MSG = std::mem::zeroed();
+            while PeekMessageW(&mut raw_msg, raw_hwnd, WM_INPUT, WM_INPUT, PM_REMOVE) != 0 {
+                process_raw_input_lparam(raw_msg.lParam, Some(&hook_data.worker_tx));
+            }
+        }
+
+        // Check if user is in "Detect Keyboard" mode:
+        if DETECTING_KEYBOARD.load(Ordering::Relaxed) {
+            if is_key_down {
+                DETECTING_KEYBOARD.store(false, Ordering::SeqCst);
+                let current_dev = LAST_HARDWARE_KEYBOARD.read().clone().unwrap_or_else(|| "UNKNOWN".to_string());
+                let _ = hook_data.worker_tx.send(WorkerMessage::KeyboardDeviceDetected(current_dev));
+            }
+            return 1; // Suppress the detection keystroke
+        }
+
+        // Target device filter: If a specific keyboard is chosen, allow other keyboards to type freely
+        let target_device = hook_data.state.target_keyboard_device.read().clone();
+        if let Some(ref target) = target_device {
+            if target != "all" && !target.is_empty() {
+                let current_dev = LAST_HARDWARE_KEYBOARD.read().clone().unwrap_or_default();
+                // If device is known and DOES NOT match target, pass through to Windows immediately
+                if !current_dev.is_empty() && !current_dev.eq_ignore_ascii_case(target) && !current_dev.contains(target) {
+                    let duration_us = hook_start.elapsed().as_micros() as u64;
+                    let _ = hook_data.worker_tx.send(WorkerMessage::Telemetry(TelemetryRecord {
+                        timestamp_ms: current_time_ms(),
+                        fg_window,
+                        fg_pid,
+                        is_self_foreground,
+                        vk_code,
+                        vk_name: vk_code_to_name(vk_code),
+                        scan_code,
+                        is_extended,
+                        is_key_down,
+                        is_injected: false,
+                        numlock_on,
+                        matched_logical_key: None,
+                        deck_mode_enabled: false,
+                        event_suppressed: false,
+                        queued_action: None,
+                        hook_duration_us: duration_us,
+                    }));
+                    return CallNextHookEx(0 as _, n_code, w_param, l_param);
+                }
             }
         }
 

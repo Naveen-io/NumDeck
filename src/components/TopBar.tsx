@@ -1,12 +1,13 @@
 import React from 'react';
-import { Profile } from '../types';
+import { Profile, KeyboardDeviceInfo } from '../types';
 import { 
   ChevronDown, 
   Folder, 
   ArrowLeft, 
   Power,
   CheckCircle2,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Keyboard
 } from 'lucide-react';
 
 interface TopBarProps {
@@ -21,6 +22,8 @@ interface TopBarProps {
   numLockOn: boolean;
   isCalibrated: boolean;
   onOpenCalibration: () => void;
+  targetKeyboardDevice?: string;
+  connectedKeyboards?: KeyboardDeviceInfo[];
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -35,11 +38,16 @@ export const TopBar: React.FC<TopBarProps> = ({
   numLockOn,
   isCalibrated,
   onOpenCalibration,
+  targetKeyboardDevice,
+  connectedKeyboards,
 }) => {
   const currentProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0];
   const currentFolder = activeFolderId && currentProfile
     ? currentProfile.folders?.find((f) => f.id === activeFolderId)
     : undefined;
+
+  const activeDevice = connectedKeyboards?.find((k) => k.id === targetKeyboardDevice);
+  const activeDeviceName = activeDevice ? activeDevice.name : (targetKeyboardDevice || 'All Keyboards');
 
   return (
     <header className="h-14 border-b border-[#1F2532] bg-[#0B0D12] px-6 flex items-center justify-between shrink-0 select-none">
@@ -97,6 +105,21 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Hardware Status & Controls */}
       <div className="flex items-center gap-3">
+        {/* Target Keyboard Filter Pill */}
+        <div 
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border bg-[#131722] border-[#202736]"
+          title={targetKeyboardDevice && targetKeyboardDevice !== 'all' ? `Isolated to: ${activeDeviceName}` : 'Affects all connected keyboards'}
+        >
+          <Keyboard size={13} className={targetKeyboardDevice && targetKeyboardDevice !== 'all' ? 'text-[#3B82F6]' : 'text-[#64748B]'} />
+          <span className="text-[#64748B] font-semibold text-[11px]">
+            Device: <strong className={targetKeyboardDevice && targetKeyboardDevice !== 'all' ? 'text-[#3B82F6]' : 'text-[#94A3B8]'}>
+              {targetKeyboardDevice && targetKeyboardDevice !== 'all'
+                ? (activeDeviceName.length > 18 ? activeDeviceName.slice(0, 18) + '...' : activeDeviceName)
+                : 'All'}
+            </strong>
+          </span>
+        </div>
+
         {/* Physical NumLock State */}
         <div 
           className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium border bg-[#131722] border-[#202736]"

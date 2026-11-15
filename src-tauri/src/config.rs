@@ -1528,4 +1528,15 @@ mod config_tests {
         let deserialized: ActionConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(action, deserialized);
     }
+
+    #[test]
+    fn test_enumerate_keyboards_integration() {
+        let keyboards = crate::keyboard::enumerate_keyboards();
+        println!("Enumerated {} keyboard devices:", keyboards.len());
+        for kb in &keyboards {
+            println!(" - ID: {} | Name: {} | Internal: {} | Virtual: {}", kb.id, kb.name, kb.is_internal, kb.is_virtual);
+        }
+        // At least one physical or virtual keyboard must exist on any Windows system
+        assert!(!keyboards.is_empty());
+    }
 }
