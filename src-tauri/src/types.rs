@@ -139,10 +139,15 @@ impl CalibrationProfile {
     /// Return default fallback signatures based on standard PC keyboard architecture
     pub fn standard_default() -> Self {
         let mut signatures = HashMap::new();
-        // NumLock (Scan 0x45, Ext: 0)
+        // NumLock (Scan 0x45, Ext: 0 or 1, and generic VK_NUMLOCK)
         signatures.insert(
             "numpad_numlock".to_string(),
-            vec![KeySignature::new(0x90, 0x45, false)],
+            vec![
+                KeySignature::new(0x90, 0x45, false),
+                KeySignature::new(0x90, 0x45, true),
+                KeySignature::new(0x90, 0x00, false),
+                KeySignature::new(0x90, 0x00, true),
+            ],
         );
         // Divide / (Scan 0x35, Ext: 1)
         signatures.insert(
@@ -268,6 +273,11 @@ impl CalibrationProfile {
     /// Match an incoming physical key event against calibrated keys.
     /// Returns the logical key id if matched.
     pub fn find_matched_key(&self, vk_code: u32, scan_code: u32, is_extended: bool) -> Option<String> {
+        // Direct recognition for NumLock (VK 0x90) across all variations of external USB keypads
+        if vk_code == 0x90 {
+            return Some("numpad_numlock".to_string());
+        }
+
         // Enforce physical numpad validity first: system keys, main keyboard keys, and dedicated nav keys are immediately rejected
         if !is_valid_numpad_event(vk_code, scan_code, is_extended) {
             return None;
@@ -317,6 +327,7 @@ pub enum ActionConfig {
     },
     BackToRootFolder,
     ToggleDeckMode,
+    Passthrough,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -701,5 +712,25 @@ mod tests {
             true,
         );
         assert_eq!(decision_injected, HookDecision::PassThrough);
+    }
+
+    #[test]
+    fn test_numlock_variations_always_match_numpad_numlock() {
+        let cal = CalibrationProfile::standard_default();
+        // Standard NumLock
+        assert_eq!(cal.find_matched_key(0x90, 0x45, false), Some("numpad_numlock".to_string()));
+        // Extended NumLock (found on various external USB numeric keypads)
+        assert_eq!(cal.find_matched_key(0x90, 0x45, true), Some("numpad_numlock".to_string()));
+        // Zero-scan NumLock
+        assert_eq!(cal.find_matched_key(0x90, 0x00, false), Some("numpad_numlock".to_string()));
+    }
+
+    #[test]
+    fn test_passthrough_action_serialization() {
+        let action = ActionConfig::Passthrough;
+        let json = serde_json::to_string(&action).unwrap();
+        assert_eq!(json, r#"{"type":"Passthrough"}"#);
+        let deserialized: ActionConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, ActionConfig::Passthrough);
     }
 }

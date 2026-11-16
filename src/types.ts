@@ -31,7 +31,8 @@ export type ActionConfig =
   | { type: 'SwitchProfile'; payload: { profile_id: string } }
   | { type: 'NavigateFolder'; payload: { folder_id: string } }
   | { type: 'BackToRootFolder'; payload?: undefined }
-  | { type: 'ToggleDeckMode'; payload?: undefined };
+  | { type: 'ToggleDeckMode'; payload?: undefined }
+  | { type: 'Passthrough'; payload?: undefined };
 
 export interface ActionStep {
   action: ActionConfig;

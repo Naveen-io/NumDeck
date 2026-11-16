@@ -32,11 +32,12 @@ impl ActionExecutor {
                 }
                 Ok(())
             }
-            // State-only actions are handled by the controller
+            // State-only or passthrough actions are handled directly by the hook engine
             ActionConfig::SwitchProfile { .. }
             | ActionConfig::NavigateFolder { .. }
             | ActionConfig::BackToRootFolder
-            | ActionConfig::ToggleDeckMode => Ok(()),
+            | ActionConfig::ToggleDeckMode
+            | ActionConfig::Passthrough => Ok(()),
         }
     }
 

@@ -50,7 +50,7 @@ const PRESET_COLORS = [
   '#397BFF', '#65C991', '#E9B86A', '#ED7777', '#5865F2', '#1DB954', '#007ACC', '#4EC9B0', '#FF0000', '#9146FF', '#FFFFFF'
 ];
 
-type ActionCategory = 'launch' | 'open' | 'hotkey' | 'text' | 'media' | 'multi' | 'nav';
+type ActionCategory = 'launch' | 'open' | 'hotkey' | 'text' | 'media' | 'multi' | 'nav' | 'passthrough';
 
 export const ActionModal: React.FC<ActionModalProps> = ({
   keyId,
@@ -151,6 +151,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
       case 'NavigateFolder':
       case 'ToggleDeckMode':
       case 'BackToRootFolder': return 'nav';
+      case 'Passthrough': return 'passthrough';
       default: return 'launch';
     }
   };
@@ -268,6 +269,10 @@ export const ActionModal: React.FC<ActionModalProps> = ({
         return {
           type: 'SwitchProfile',
           payload: { profile_id: navTargetProfile },
+        };
+      case 'passthrough':
+        return {
+          type: 'Passthrough',
         };
     }
   };
@@ -515,6 +520,7 @@ export const ActionModal: React.FC<ActionModalProps> = ({
                 { id: 'text', label: 'Type Text', icon: ExternalLink },
                 { id: 'multi', label: 'Multi-Action', icon: Layers },
                 { id: 'nav', label: 'Profile', icon: ArrowRight },
+                { id: 'passthrough', label: 'Default Key', icon: KeyIcon },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const active = category === tab.id;
@@ -732,6 +738,18 @@ export const ActionModal: React.FC<ActionModalProps> = ({
                     </option>
                   ))}
                 </select>
+              </div>
+            )}
+
+            {category === 'passthrough' && (
+              <div className="p-4 rounded-xl bg-[#12151C] border border-[#252C39] space-y-2">
+                <div className="flex items-center gap-2 text-[#397BFF]">
+                  <KeyIcon size={18} />
+                  <span className="text-xs font-bold text-[#F4F6FA]">Native Physical Key Passthrough</span>
+                </div>
+                <p className="text-xs text-[#929CAC] leading-relaxed">
+                  This key will keep its standard hardware keyboard function without interruption. Keystrokes (such as <strong className="text-white">Enter</strong>, numbers, or symbols) are passed straight to Windows even while Deck Mode is active.
+                </p>
               </div>
             )}
           </div>

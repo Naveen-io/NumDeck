@@ -808,69 +808,140 @@ unsafe extern "system" fn low_level_keyboard_proc(
             drop(cal);
 
             if let Some(key_id) = matched_key {
-                let mut queued_action_str = None;
+                let profile = hook_data.state.active_profile.read();
+                let active_folder = hook_data.state.active_folder_id.read();
 
-                if is_key_down {
-                    let mut pressed = hook_data.state.pressed_keys.write();
-                    let is_first_press = pressed.insert(key_id.clone());
-                    drop(pressed);
+                let assignment = if let Some(folder_id) = active_folder.as_ref() {
+                    profile
+                        .folders
+                        .iter()
+                        .find(|f| f.id == *folder_id)
+                        .and_then(|f| f.keys.get(&key_id))
+                        .or_else(|| profile.keys.get(&key_id))
+                } else {
+                    profile.keys.get(&key_id)
+                };
 
-                    if is_first_press {
-                        let profile = hook_data.state.active_profile.read();
-                        let active_folder = hook_data.state.active_folder_id.read();
+                // Check if key is configured for passthrough or has no action (default physical key)
+                let is_passthrough = match assignment.and_then(|a| a.action.as_ref()) {
+                    Some(ActionConfig::Passthrough) | None => true,
+                    _ => false,
+                };
 
-                        let assignment = if let Some(folder_id) = active_folder.as_ref() {
-                            profile
-                                .folders
-                                .iter()
-                                .find(|f| f.id == *folder_id)
-                                .and_then(|f| f.keys.get(&key_id))
-                                .or_else(|| profile.keys.get(&key_id))
-                        } else {
-                            profile.keys.get(&key_id)
-                        };
+                if !is_passthrough {
+                    let mut queued_action_str = None;
 
-                        if let Some(assign) = assignment {
-                            if let Some(action) = &assign.action {
-                                queued_action_str = Some(format!("{:?}", action));
-                                let _ = hook_data.worker_tx.send(WorkerMessage::ExecuteAction {
-                                    key_id: key_id.clone(),
-                                    action: action.clone(),
-                                });
+                    if is_key_down {
+                        let mut pressed = hook_data.state.pressed_keys.write();
+                        let is_first_press = pressed.insert(key_id.clone());
+                        drop(pressed);
+
+                        if is_first_press {
+                            if let Some(assign) = assignment {
+                                if let Some(action) = &assign.action {
+                                    queued_action_str = Some(format!("{:?}", action));
+                                    let _ = hook_data.worker_tx.send(WorkerMessage::ExecuteAction {
+                                        key_id: key_id.clone(),
+                                        action: action.clone(),
+                                    });
+                                }
                             }
                         }
+                    } else {
+                        let mut pressed = hook_data.state.pressed_keys.write();
+                        pressed.remove(&key_id);
                     }
-                } else {
-                    let mut pressed = hook_data.state.pressed_keys.write();
-                    pressed.remove(&key_id);
+
+                    let duration_us = hook_start.elapsed().as_micros() as u64;
+                    let _ = hook_data.worker_tx.send(WorkerMessage::Telemetry(TelemetryRecord {
+                        timestamp_ms: current_time_ms(),
+                        fg_window,
+                        fg_pid,
+                        is_self_foreground,
+                        vk_code,
+                        vk_name: vk_code_to_name(vk_code),
+                        scan_code,
+                        is_extended,
+                        is_key_down,
+                        is_injected: false,
+                        numlock_on,
+                        matched_logical_key: Some(key_id),
+                        deck_mode_enabled: true,
+                        event_suppressed: true,
+                        queued_action: queued_action_str,
+                        hook_duration_us: duration_us,
+                    }));
+
+                    // SUPPRESS THIS KEY FROM PASSING TO WINDOWS: Return 1
+                    return 1;
                 }
-
-                let duration_us = hook_start.elapsed().as_micros() as u64;
-                let _ = hook_data.worker_tx.send(WorkerMessage::Telemetry(TelemetryRecord {
-                    timestamp_ms: current_time_ms(),
-                    fg_window,
-                    fg_pid,
-                    is_self_foreground,
-                    vk_code,
-                    vk_name: vk_code_to_name(vk_code),
-                    scan_code,
-                    is_extended,
-                    is_key_down,
-                    is_injected: false,
-                    numlock_on,
-                    matched_logical_key: Some(key_id),
-                    deck_mode_enabled: true,
-                    event_suppressed: true,
-                    queued_action: queued_action_str,
-                    hook_duration_us: duration_us,
-                }));
-
-                // SUPPRESS THIS KEY FROM PASSING TO WINDOWS: Return 1
-                return 1;
             }
         }
 
-        // 3. Normal Mode or unmapped keys: Pass through
+        // 3. Normal Mode: Check for Deck Mode toggle hotkey on numpad
+        if current_mode == EngineMode::Normal {
+            let cal = hook_data.state.calibration.read();
+            let matched_key = cal.find_matched_key(vk_code, scan_code, is_extended);
+            drop(cal);
+
+            if let Some(key_id) = matched_key {
+                let profile = hook_data.state.active_profile.read();
+                let assignment = profile.keys.get(&key_id);
+                let action = assignment.and_then(|a| a.action.as_ref());
+                let is_toggle_deck = match action {
+                    Some(ActionConfig::ToggleDeckMode) => true,
+                    Some(_) => false,
+                    None => key_id == "numpad_numlock",
+                };
+                drop(profile);
+
+                if is_toggle_deck {
+                    let mut queued_action_str = None;
+
+                    if is_key_down {
+                        let mut pressed = hook_data.state.pressed_keys.write();
+                        let is_first_press = pressed.insert(key_id.clone());
+                        drop(pressed);
+
+                        if is_first_press {
+                            queued_action_str = Some("ToggleDeckMode".to_string());
+                            let _ = hook_data.worker_tx.send(WorkerMessage::ExecuteAction {
+                                key_id: key_id.clone(),
+                                action: ActionConfig::ToggleDeckMode,
+                            });
+                        }
+                    } else {
+                        let mut pressed = hook_data.state.pressed_keys.write();
+                        pressed.remove(&key_id);
+                    }
+
+                    let duration_us = hook_start.elapsed().as_micros() as u64;
+                    let _ = hook_data.worker_tx.send(WorkerMessage::Telemetry(TelemetryRecord {
+                        timestamp_ms: current_time_ms(),
+                        fg_window,
+                        fg_pid,
+                        is_self_foreground,
+                        vk_code,
+                        vk_name: vk_code_to_name(vk_code),
+                        scan_code,
+                        is_extended,
+                        is_key_down,
+                        is_injected: false,
+                        numlock_on,
+                        matched_logical_key: Some(key_id),
+                        deck_mode_enabled: false,
+                        event_suppressed: true,
+                        queued_action: queued_action_str,
+                        hook_duration_us: duration_us,
+                    }));
+
+                    // Suppress toggle keystroke so Windows NumLock LED doesn't desync
+                    return 1;
+                }
+            }
+        }
+
+        // 4. Normal Mode or unmapped / passthrough keys: Pass through
         let cal = hook_data.state.calibration.read();
         let matched = cal.find_matched_key(vk_code, scan_code, is_extended);
         drop(cal);
