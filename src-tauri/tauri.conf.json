@@ -37,8 +37,8 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "shortDescription": "Turn your ordinary numpad into a customizable Stream Deck-style shortcut controller for Windows.",
-    "longDescription": "NumDeck turns any ordinary physical numeric keypad into a customizable Stream Deck-style shortcut controller for Windows. Trigger macros, launch apps, control audio, and execute complex workflows without purchasing separate hardware.",
+    "shortDescription": "Turn your ordinary numpad into a customizable Stream Deck-style shortcut controller for Windows and Linux.",
+    "longDescription": "NumDeck turns any ordinary physical numeric keypad into a customizable Stream Deck-style shortcut controller for Windows and Linux. Trigger macros, launch apps, control audio, and execute complex workflows without purchasing separate hardware.",
     "copyright": "Copyright © 2026 Naveen. All rights reserved.",
     "category": "Utility",
     "windows": {

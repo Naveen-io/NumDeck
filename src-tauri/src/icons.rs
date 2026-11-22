@@ -1,6 +1,7 @@
 use std::process::Command;
 
 /// Open native Windows OpenFileDialog to browse for an .exe file
+#[cfg(target_os = "windows")]
 pub fn browse_executable() -> Result<Option<String>, String> {
     let script = r#"
 Add-Type -AssemblyName System.Windows.Forms
@@ -25,7 +26,32 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     }
 }
 
+/// Open native Linux file chooser dialog
+#[cfg(target_os = "linux")]
+pub fn browse_executable() -> Result<Option<String>, String> {
+    if let Ok(output) = Command::new("zenity")
+        .args(["--file-selection", "--title=Select Application Executable"])
+        .output()
+    {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() {
+            return Ok(Some(path));
+        }
+    }
+    if let Ok(output) = Command::new("kdialog")
+        .args(["--getopenfilename"])
+        .output()
+    {
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !path.is_empty() {
+            return Ok(Some(path));
+        }
+    }
+    Ok(None)
+}
+
 /// Extract Windows icon from an executable and return a base64 PNG data URL
+#[cfg(target_os = "windows")]
 pub fn extract_icon_base64(exe_path: &str) -> Result<String, String> {
     let script = format!(
         r#"
@@ -58,4 +84,10 @@ if (Test-Path $p) {{
     } else {
         Err(format!("Could not extract icon from '{}'", exe_path))
     }
+}
+
+/// Linux fallback for icon extraction
+#[cfg(target_os = "linux")]
+pub fn extract_icon_base64(_exe_path: &str) -> Result<String, String> {
+    Err("Direct binary icon extraction is not supported on Linux yet".to_string())
 }

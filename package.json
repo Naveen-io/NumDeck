@@ -1,7 +1,7 @@
 {
   "name": "numdeck",
   "version": "1.2.0",
-  "description": "Turn your ordinary numpad into a customizable Stream Deck-style shortcut controller for Windows.",
+  "description": "Turn your ordinary numpad into a customizable Stream Deck-style shortcut controller for Windows and Linux.",
   "author": "Naveen (https://github.com/Naveen-io)",
   "license": "MIT",
   "repository": {

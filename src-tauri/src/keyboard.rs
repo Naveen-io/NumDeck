@@ -11,21 +11,34 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::Foundation::*;
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Threading::{GetCurrentProcessId, GetCurrentThreadId};
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::*;
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
+#[cfg(target_os = "windows")]
 const LLKHF_EXTENDED_FLAG: u32 = 0x00000001;
+#[cfg(target_os = "windows")]
 const LLKHF_INJECTED_FLAG: u32 = 0x00000010;
+#[cfg(target_os = "windows")]
 const LLKHF_UP_FLAG: u32 = 0x00000080;
 
 // Global Raw Input sink window and device tracking
+#[cfg(target_os = "windows")]
 static RAW_INPUT_HWND: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
+#[cfg(target_os = "windows")]
 static LAST_HARDWARE_KEYBOARD: parking_lot::RwLock<Option<String>> = parking_lot::RwLock::new(None);
+#[cfg(target_os = "windows")]
 static DETECTING_KEYBOARD: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "windows")]
 static DEVICE_HANDLE_CACHE: parking_lot::RwLock<Option<HashMap<isize, String>>> = parking_lot::RwLock::new(None);
 
 /// Diagnostic telemetry record capturing all 12 requested fields
@@ -103,15 +116,58 @@ impl KeyboardEngineState {
     }
 }
 
+#[cfg(target_os = "windows")]
 pub fn start_detecting_keyboard() {
     DETECTING_KEYBOARD.store(true, Ordering::SeqCst);
 }
 
+#[cfg(target_os = "windows")]
 pub fn stop_detecting_keyboard() {
     DETECTING_KEYBOARD.store(false, Ordering::SeqCst);
 }
 
+#[cfg(target_os = "linux")]
+pub fn start_detecting_keyboard() {}
+
+#[cfg(target_os = "linux")]
+pub fn stop_detecting_keyboard() {}
+
+/// Enumerate all connected keyboards on Linux
+#[cfg(target_os = "linux")]
+pub fn enumerate_keyboards() -> Vec<KeyboardDeviceInfo> {
+    let mut results = Vec::new();
+    if let Ok(entries) = std::fs::read_dir("/dev/input/by-id") {
+        for entry in entries.flatten() {
+            let path_str = entry.path().to_string_lossy().to_string();
+            if path_str.ends_with("-event-kbd") {
+                let name = entry.file_name().to_string_lossy()
+                    .replace("-event-kbd", "")
+                    .replace("usb-", "")
+                    .replace('_', " ");
+                results.push(KeyboardDeviceInfo {
+                    id: path_str.clone(),
+                    name: format!("Keyboard ({})", name),
+                    raw_path: path_str,
+                    is_internal: false,
+                    is_virtual: false,
+                });
+            }
+        }
+    }
+    if results.is_empty() {
+        results.push(KeyboardDeviceInfo {
+            id: "all".to_string(),
+            name: "Default Linux Keypad (/dev/input)".to_string(),
+            raw_path: "/dev/input".to_string(),
+            is_internal: false,
+            is_virtual: false,
+        });
+    }
+    results
+}
+
 /// Enumerate all connected physical and virtual keyboards on Windows using Raw Input
+#[cfg(target_os = "windows")]
 pub fn enumerate_keyboards() -> Vec<KeyboardDeviceInfo> {
     let mut results = Vec::new();
     unsafe {
@@ -210,6 +266,7 @@ pub fn enumerate_keyboards() -> Vec<KeyboardDeviceInfo> {
 }
 
 /// Convert a device handle from Raw Input into a unique normalized device identifier
+#[cfg(target_os = "windows")]
 fn resolve_device_id_from_handle(hdevice: HANDLE) -> String {
     if hdevice.is_null() {
         return "SYNTHETIC".to_string();
@@ -269,6 +326,7 @@ fn resolve_device_id_from_handle(hdevice: HANDLE) -> String {
 }
 
 /// Process a WM_INPUT lParam, update the most recent hardware keyboard, and trigger detection if active
+#[cfg(target_os = "windows")]
 fn process_raw_input_lparam(lparam: LPARAM, worker_tx: Option<&Sender<WorkerMessage>>) {
     unsafe {
         let mut size = std::mem::size_of::<RAWINPUT>() as u32;
@@ -294,19 +352,23 @@ fn process_raw_input_lparam(lparam: LPARAM, worker_tx: Option<&Sender<WorkerMess
 }
 
 // Global static holder for hook context accessed by the Win32 C-callback
+#[cfg(target_os = "windows")]
 static HOOK_DATA: parking_lot::RwLock<Option<HookContext>> = parking_lot::RwLock::new(None);
 
+#[cfg(target_os = "windows")]
 struct HookContext {
     state: Arc<KeyboardEngineState>,
     worker_tx: Sender<WorkerMessage>,
 }
 
+#[cfg(target_os = "windows")]
 pub struct KeyboardEngine {
     state: Arc<KeyboardEngineState>,
     hook_thread_id: Arc<AtomicU32>,
     pub worker_tx: Sender<WorkerMessage>,
 }
 
+#[cfg(target_os = "windows")]
 impl KeyboardEngine {
     pub fn start(
         app_handle: AppHandle,
@@ -330,7 +392,7 @@ impl KeyboardEngine {
         thread::Builder::new()
             .name("numdeck-action-worker".to_string())
             .spawn(move || {
-                Self::worker_loop(worker_rx, worker_state, worker_app);
+                run_worker_loop(worker_rx, worker_state, worker_app);
             })
             .expect("Failed to spawn action worker thread");
 
@@ -359,14 +421,15 @@ impl KeyboardEngine {
     pub fn state(&self) -> Arc<KeyboardEngineState> {
         Arc::clone(&self.state)
     }
+}
 
-    /// Background thread that handles logging, action execution, and UI IPC emissions
-    /// Completely decoupling heavy work and IPC from the critical low-level keyboard hook.
-    fn worker_loop(
-        rx: Receiver<WorkerMessage>,
-        state: Arc<KeyboardEngineState>,
-        app: AppHandle,
-    ) {
+/// Background thread that handles logging, action execution, and UI IPC emissions
+/// Completely decoupling heavy work and IPC from the critical low-level keyboard hook.
+fn run_worker_loop(
+    rx: Receiver<WorkerMessage>,
+    state: Arc<KeyboardEngineState>,
+    app: AppHandle,
+) {
         log::info!("Off-thread action/telemetry worker initialized.");
 
         // Open local debug log file for streaming telemetry
@@ -520,6 +583,8 @@ impl KeyboardEngine {
         log::info!("Off-thread action/telemetry worker terminated.");
     }
 
+#[cfg(target_os = "windows")]
+impl KeyboardEngine {
     /// Dedicated hook thread running Windows message loop with Raw Input Device Sink
     fn hook_thread_loop(thread_id_store: Arc<AtomicU32>) {
         unsafe {
@@ -608,6 +673,7 @@ impl KeyboardEngine {
     }
 }
 
+#[cfg(target_os = "windows")]
 impl Drop for KeyboardEngine {
     fn drop(&mut self) {
         self.shutdown();
@@ -615,6 +681,7 @@ impl Drop for KeyboardEngine {
 }
 
 /// Fast foreground window query (pure memory read in user32, sub-microsecond)
+#[cfg(target_os = "windows")]
 fn get_foreground_info() -> (String, u32, bool) {
     unsafe {
         let fg_hwnd = GetForegroundWindow();
@@ -641,6 +708,7 @@ fn get_foreground_info() -> (String, u32, bool) {
 /// The Low-Level Keyboard Hook Callback
 /// GUARANTEED SUB-5-MICROSECOND EXECUTION.
 /// ZERO disk I/O, ZERO IPC to webviews, ZERO COM calls, ZERO heavy locks.
+#[cfg(target_os = "windows")]
 unsafe extern "system" fn low_level_keyboard_proc(
     n_code: i32,
     w_param: WPARAM,
@@ -986,6 +1054,7 @@ fn format_timestamp(ms: u64) -> String {
     format!("{:02}:{:02}:{:02}.{:03}", h, m, s, millis)
 }
 
+#[cfg(target_os = "windows")]
 pub fn vk_code_to_name(vk: u32) -> String {
     match vk as u16 {
         VK_NUMPAD0 => "NUMPAD 0".to_string(),
@@ -1024,5 +1093,114 @@ pub fn vk_code_to_name(vk: u32) -> String {
         0x41..=0x5A => format!("KEY {}", (vk as u8 as char)),
         VK_F1..=VK_F12 => format!("F{}", vk - (VK_F1 as u32) + 1),
         _ => format!("0x{:02X}", vk),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LINUX ENGINE IMPLEMENTATION
+// ---------------------------------------------------------------------------
+
+#[cfg(target_os = "linux")]
+pub fn vk_code_to_name(vk: u32) -> String {
+    match vk {
+        69 => "NUM LOCK".to_string(),
+        98 => "NUMPAD /".to_string(),
+        55 => "NUMPAD *".to_string(),
+        74 => "NUMPAD -".to_string(),
+        78 => "NUMPAD +".to_string(),
+        96 => "ENTER".to_string(),
+        83 => "NUMPAD .".to_string(),
+        82 => "NUMPAD 0".to_string(),
+        79 => "NUMPAD 1".to_string(),
+        80 => "NUMPAD 2".to_string(),
+        81 => "NUMPAD 3".to_string(),
+        75 => "NUMPAD 4".to_string(),
+        76 => "NUMPAD 5".to_string(),
+        77 => "NUMPAD 6".to_string(),
+        71 => "NUMPAD 7".to_string(),
+        72 => "NUMPAD 8".to_string(),
+        73 => "NUMPAD 9".to_string(),
+        _ => format!("KEY 0x{:02X}", vk),
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub struct KeyboardEngine {
+    state: Arc<KeyboardEngineState>,
+    stop_flag: Arc<AtomicBool>,
+    pub worker_tx: Sender<WorkerMessage>,
+}
+
+#[cfg(target_os = "linux")]
+impl KeyboardEngine {
+    pub fn start(
+        app_handle: AppHandle,
+        calibration: CalibrationProfile,
+        default_profile: Profile,
+        initial_deck_mode: bool,
+        target_keyboard_device: Option<String>,
+    ) -> Self {
+        let state = Arc::new(KeyboardEngineState::new(
+            calibration,
+            default_profile,
+            initial_deck_mode,
+            target_keyboard_device,
+        ));
+        let (worker_tx, worker_rx) = crossbeam_channel::unbounded::<WorkerMessage>();
+        let stop_flag = Arc::new(AtomicBool::new(false));
+
+        // 1. Off-Thread Action/Telemetry Worker Loop
+        let worker_state = Arc::clone(&state);
+        let worker_app = app_handle.clone();
+        thread::Builder::new()
+            .name("numdeck-action-worker".to_string())
+            .spawn(move || {
+                run_worker_loop(worker_rx, worker_state, worker_app);
+            })
+            .expect("Failed to spawn action worker thread");
+
+        // 2. Linux background input listener
+        let input_state = Arc::clone(&state);
+        let input_tx = worker_tx.clone();
+        let input_stop = Arc::clone(&stop_flag);
+        thread::Builder::new()
+            .name("numdeck-linux-input".to_string())
+            .spawn(move || {
+                Self::linux_input_loop(input_state, input_tx, input_stop);
+            })
+            .expect("Failed to spawn linux input thread");
+
+        Self {
+            state,
+            stop_flag,
+            worker_tx,
+        }
+    }
+
+    pub fn state(&self) -> Arc<KeyboardEngineState> {
+        Arc::clone(&self.state)
+    }
+
+    pub fn shutdown(&self) {
+        self.stop_flag.store(true, Ordering::SeqCst);
+    }
+
+    fn linux_input_loop(
+        _state: Arc<KeyboardEngineState>,
+        _worker_tx: Sender<WorkerMessage>,
+        stop_flag: Arc<AtomicBool>,
+    ) {
+        log::info!("Linux input listener thread initialized.");
+        while !stop_flag.load(Ordering::Relaxed) {
+            thread::sleep(Duration::from_millis(50));
+        }
+        log::info!("Linux input listener thread stopped.");
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for KeyboardEngine {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }

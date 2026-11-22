@@ -1,0 +1,107 @@
+name: Build & Release Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to attach assets to (e.g. v1.2.0)'
+        required: false
+        default: 'v1.2.0'
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-linux:
+    name: Build Linux Packages
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Tauri for Linux
+        run: npm run tauri build
+
+      - name: Prepare Linux release artifacts
+        run: |
+          mkdir -p dist-release
+          
+          # Find and copy AppImage
+          APPIMAGE=$(find src-tauri/target/release/bundle/appimage -name "*.AppImage" | head -n 1)
+          if [ -f "$APPIMAGE" ]; then
+            cp "$APPIMAGE" dist-release/NumDeck-Linux-x86_64.AppImage
+          fi
+          
+          # Find and copy Deb
+          DEB=$(find src-tauri/target/release/bundle/deb -name "*.deb" | head -n 1)
+          if [ -f "$DEB" ]; then
+            cp "$DEB" dist-release/NumDeck-Linux-amd64.deb
+          fi
+          
+          # Package standalone binary
+          if [ -f "src-tauri/target/release/numdeck" ]; then
+            mkdir -p dist-release/portable
+            cp src-tauri/target/release/numdeck dist-release/portable/numdeck
+            chmod +x dist-release/portable/numdeck
+            tar -czvf dist-release/NumDeck-Linux-x86_64.tar.gz -C dist-release/portable numdeck
+            rm -rf dist-release/portable
+          fi
+          
+          echo "Release artifacts:"
+          ls -lh dist-release/
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: NumDeck-Linux-Assets
+          path: dist-release/
+
+      - name: Upload to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [ -z "$TAG" ]; then
+            if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+              TAG="${{ github.ref_name }}"
+            else
+              TAG="v1.2.0"
+            fi
+          fi
+          echo "Target Release Tag: $TAG"
+          gh release upload "$TAG" dist-release/* --clobber

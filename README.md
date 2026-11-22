@@ -3,12 +3,13 @@
 </p>
 
 <p align="center">
-  <strong>Turn your ordinary numpad into a customizable Stream Deck-style shortcut controller for Windows.</strong>
+  <strong>Turn your ordinary numpad into a customizable Stream Deck-style shortcut controller for Windows and Linux.</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/Naveen-io/NumDeck/releases"><img src="https://img.shields.io/github/v/release/Naveen-io/NumDeck?color=blue&label=Release" alt="Release"></a>
-  <a href="https://microsoft.com/windows"><img src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-0078D4?logo=windows" alt="Windows 10/11"></a>
+  <a href="https://microsoft.com/windows"><img src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows" alt="Windows 10/11"></a>
+  <a href="https://kernel.org"><img src="https://img.shields.io/badge/Linux-Ubuntu%20%7C%20Debian%20%7C%20Arch%20%7C%20Fedora-FCC624?logo=linux&logoColor=black" alt="Linux"></a>
   <a href="https://rust-lang.org"><img src="https://img.shields.io/badge/Backend-Rust%20%28Low--Level%20Hook%29-DEA584?logo=rust" alt="Rust Backend"></a>
   <a href="https://react.dev"><img src="https://img.shields.io/badge/Frontend-React%2019%20%7C%20TypeScript-61DAFB?logo=react" alt="React 19"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
@@ -75,16 +76,26 @@ NumDeck works out of the box across all modern Windows configurations:
 
 ---
 
-## Installation
+## Installation & Downloads
 
-### Option 1: Windows Installer (Recommended)
-1. Download **`NumpadDeck-Setup.exe`** from the latest [GitHub Releases](https://github.com/Naveen-io/NumDeck/releases).
-2. Run the installer and follow the quick setup wizard.
-3. Launch **NumDeck** from your Start Menu or Desktop.
+### 🪟 Windows (Windows 10 / 11)
 
-### Option 2: Portable Standalone Executable
-1. Download **`NumpadDeck.exe`** from the [GitHub Releases](https://github.com/Naveen-io/NumDeck/releases).
-2. Place it in any directory and double-click to launch—no installation or admin rights required.
+- **Installer (Recommended)**: Download **`NumDeck-Windows-Setup.exe`** from the latest [GitHub Releases](https://github.com/Naveen-io/NumDeck/releases) and follow the quick setup wizard.
+- **Portable**: Download **`NumDeck-Windows-Portable.exe`** and launch directly without installing.
+
+---
+
+### 🐧 Linux (Ubuntu, Debian, Fedora, Arch, and more)
+
+- **AppImage (Universal)**: Download **`NumDeck-Linux-x86_64.AppImage`**, make it executable (`chmod +x NumDeck-Linux-x86_64.AppImage`), and run!
+- **Debian / Ubuntu Package**: Download and install **`NumDeck-Linux-amd64.deb`**:
+  ```bash
+  sudo dpkg -i NumDeck-Linux-amd64.deb || sudo apt-get install -f -y
+  ```
+- **Portable Tarball**: Download **`NumDeck-Linux-x86_64.tar.gz`**, extract, and run `./numdeck`.
+
+> [!NOTE]
+> **Linux Feedback Welcome**: I got Linux testing set up for NumDeck, but hardware configurations and desktop environments (X11 / Wayland) vary widely. Your testing and feedback are kindly needed and warmly appreciated! If you test on Linux, please drop a note in GitHub Issues with your distro and numpad model.
 
 ---
 

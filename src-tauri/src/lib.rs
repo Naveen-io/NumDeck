@@ -15,12 +15,16 @@ use tauri::{
     AppHandle, Emitter, Manager, State,
 };
 use types::*;
+
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::System::Registry::{
     RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER, KEY_SET_VALUE,
     REG_SZ,
 };
+#[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
 
+#[cfg(target_os = "windows")]
 pub fn update_startup_registry(enable: bool) -> Result<(), String> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
@@ -83,6 +87,26 @@ pub fn update_startup_registry(enable: bool) -> Result<(), String> {
     result
 }
 
+#[cfg(target_os = "linux")]
+pub fn update_startup_registry(enable: bool) -> Result<(), String> {
+    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
+    let autostart_dir = std::path::PathBuf::from(home).join(".config").join("autostart");
+    let desktop_file = autostart_dir.join("numdeck.desktop");
+
+    if enable {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let content = format!(
+            "[Desktop Entry]\nType=Application\nName=NumDeck\nComment=Turn your numpad into a stream deck\nExec={}\nTerminal=false\nCategories=Utility;\n",
+            exe.display()
+        );
+        std::fs::create_dir_all(&autostart_dir).map_err(|e| e.to_string())?;
+        std::fs::write(&desktop_file, content).map_err(|e| e.to_string())?;
+    } else if desktop_file.exists() {
+        let _ = std::fs::remove_file(&desktop_file);
+    }
+    Ok(())
+}
+
 pub struct AppContext {
     pub engine: RwLock<Option<KeyboardEngine>>,
     pub config_manager: ConfigManager,
@@ -126,8 +150,15 @@ fn set_engine_mode(
 }
 
 #[command]
+#[cfg(target_os = "windows")]
 fn get_numlock_state() -> bool {
     unsafe { (GetKeyState(VK_NUMLOCK as i32) & 1) != 0 }
+}
+
+#[command]
+#[cfg(target_os = "linux")]
+fn get_numlock_state() -> bool {
+    true
 }
 
 #[command]
