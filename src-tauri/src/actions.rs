@@ -44,6 +44,8 @@ impl ActionExecutor {
             | ActionConfig::NavigateFolder { .. }
             | ActionConfig::BackToRootFolder
             | ActionConfig::ToggleDeckMode
+            | ActionConfig::ToggleLayer
+            | ActionConfig::SwitchLayer { .. }
             | ActionConfig::Passthrough => Ok(()),
         }
     }

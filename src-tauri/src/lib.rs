@@ -175,6 +175,7 @@ fn set_active_profile(
         if let Some(engine) = context.engine.read().as_ref() {
             *engine.state().active_profile.write() = profile;
             *engine.state().active_folder_id.write() = None;
+            *engine.state().base_profile_id.write() = profile_id.clone();
         }
         let _ = context.config_manager.save(&data);
         let _ = app.emit("profile-switched", profile_id);
@@ -190,14 +191,17 @@ fn save_profiles(
     context: State<'_, AppContext>,
 ) -> Result<(), String> {
     let mut data = context.data.write();
-    data.profiles = profiles;
+    data.profiles = profiles.clone();
 
-    // Update active profile in engine if it was updated
+    // Update active profile and all_profiles in engine
     let active_id = data.settings.active_profile_id.clone();
     if let Some(curr) = data.profiles.iter().find(|p| p.id == active_id).cloned() {
         if let Some(engine) = context.engine.read().as_ref() {
             *engine.state().active_profile.write() = curr;
+            *engine.state().all_profiles.write() = profiles;
         }
+    } else if let Some(engine) = context.engine.read().as_ref() {
+        *engine.state().all_profiles.write() = profiles;
     }
 
     context.config_manager.save(&data)
@@ -221,7 +225,13 @@ fn save_settings(
             .state()
             .sound_feedback
             .store(settings.sound_feedback, std::sync::atomic::Ordering::Relaxed);
+        engine
+            .state()
+            .auto_profile_switching
+            .store(settings.auto_profile_switching, std::sync::atomic::Ordering::Relaxed);
+        *engine.state().active_layer.write() = settings.active_layer;
         *engine.state().target_keyboard_device.write() = settings.target_keyboard_device.clone();
+        engine.update_global_hotkey(settings.global_hotkey.clone());
     }
 
     if old_run_at_startup != settings.run_at_startup {
@@ -231,6 +241,31 @@ fn save_settings(
     }
 
     context.config_manager.save(&data)
+}
+
+#[command]
+fn get_active_layer(context: State<'_, AppContext>) -> Result<u8, String> {
+    if let Some(engine) = context.engine.read().as_ref() {
+        Ok(*engine.state().active_layer.read())
+    } else {
+        Ok(0)
+    }
+}
+
+#[command]
+fn set_active_layer(
+    layer: u8,
+    context: State<'_, AppContext>,
+    app: AppHandle,
+) -> Result<(), String> {
+    if let Some(engine) = context.engine.read().as_ref() {
+        *engine.state().active_layer.write() = layer;
+        let _ = app.emit("layer-changed", layer);
+    }
+    let mut data = context.data.write();
+    data.settings.active_layer = layer;
+    let _ = context.config_manager.save(&data);
+    Ok(())
 }
 
 #[command]
@@ -429,8 +464,12 @@ pub fn run() {
                 app_handle,
                 app_data.calibration.clone(),
                 active_profile,
+                app_data.profiles.clone(),
                 app_data.settings.deck_mode,
                 app_data.settings.target_keyboard_device.clone(),
+                app_data.settings.global_hotkey.clone(),
+                app_data.settings.auto_profile_switching,
+                app_data.settings.active_layer,
             );
 
             *app_context.engine.write() = Some(engine);
@@ -538,7 +577,9 @@ pub fn run() {
             trigger_deck_key,
             get_connected_keyboards,
             start_detecting_keyboard,
-            stop_detecting_keyboard
+            stop_detecting_keyboard,
+            get_active_layer,
+            set_active_layer
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

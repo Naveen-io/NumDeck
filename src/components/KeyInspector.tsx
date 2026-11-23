@@ -69,6 +69,10 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
         return { typeName: 'System Media', detail: act.payload?.command?.replace('_', ' ').toUpperCase() || 'Media Command' };
       case 'ToggleDeckMode':
         return { typeName: 'Mode Switch', detail: 'Toggle Normal / Deck Mode' };
+      case 'ToggleLayer':
+        return { typeName: 'Layer Toggle', detail: 'Switch between Layer A and Layer B' };
+      case 'SwitchLayer':
+        return { typeName: 'Layer Switch', detail: `Switch to Layer ${act.payload?.layer === 1 ? 'B' : 'A'}` };
       case 'Passthrough':
         return { typeName: 'Default Key', detail: 'Native Windows Passthrough' };
       default:
@@ -90,6 +94,12 @@ export const KeyInspector: React.FC<KeyInspectorProps> = ({
       icon: 'keyboard',
       color: '#64748B',
       action: { type: 'Passthrough' },
+    },
+    {
+      label: 'Toggle Layer',
+      icon: 'Layers',
+      color: '#8B5CF6',
+      action: { type: 'ToggleLayer' },
     },
     {
       label: 'Chrome',

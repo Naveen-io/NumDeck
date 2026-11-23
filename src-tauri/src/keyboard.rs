@@ -12,11 +12,16 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter};
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::Foundation::*;
+use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, HWND, LPARAM, LRESULT, WPARAM};
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
 #[cfg(target_os = "windows")]
-use windows_sys::Win32::System::Threading::{GetCurrentProcessId, GetCurrentThreadId};
+use windows_sys::Win32::System::Threading::{
+    GetCurrentProcessId, GetCurrentThreadId, OpenProcess, QueryFullProcessImageNameW,
+    PROCESS_QUERY_LIMITED_INFORMATION,
+};
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::UI::Accessibility::*;
 #[cfg(target_os = "windows")]
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::*;
 #[cfg(target_os = "windows")]
@@ -31,6 +36,13 @@ const LLKHF_INJECTED_FLAG: u32 = 0x00000010;
 #[cfg(target_os = "windows")]
 const LLKHF_UP_FLAG: u32 = 0x00000080;
 
+#[cfg(target_os = "windows")]
+const GLOBAL_HOTKEY_ID: i32 = 1001;
+#[cfg(target_os = "windows")]
+const WM_APP_UPDATE_HOTKEY: u32 = 0x8001;
+#[cfg(target_os = "windows")]
+const WM_DEVICECHANGE: u32 = 0x0219;
+
 // Global Raw Input sink window and device tracking
 #[cfg(target_os = "windows")]
 static RAW_INPUT_HWND: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
@@ -40,6 +52,32 @@ static LAST_HARDWARE_KEYBOARD: parking_lot::RwLock<Option<String>> = parking_lot
 static DETECTING_KEYBOARD: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "windows")]
 static DEVICE_HANDLE_CACHE: parking_lot::RwLock<Option<HashMap<isize, String>>> = parking_lot::RwLock::new(None);
+
+#[cfg(target_os = "windows")]
+pub fn parse_modifiers_and_vk(config: &GlobalHotkeyConfig) -> (u32, u32) {
+    let mut mods = MOD_NOREPEAT as u32;
+    for m in &config.modifiers {
+        match m.to_lowercase().as_str() {
+            "ctrl" | "control" => mods |= MOD_CONTROL as u32,
+            "alt" => mods |= MOD_ALT as u32,
+            "shift" => mods |= MOD_SHIFT as u32,
+            "win" | "super" => mods |= MOD_WIN as u32,
+            _ => {}
+        }
+    }
+    let key_upper = config.key.trim().to_uppercase();
+    let vk = match key_upper.as_str() {
+        "F1" => VK_F1, "F2" => VK_F2, "F3" => VK_F3, "F4" => VK_F4,
+        "F5" => VK_F5, "F6" => VK_F6, "F7" => VK_F7, "F8" => VK_F8,
+        "F9" => VK_F9, "F10" => VK_F10, "F11" => VK_F11, "F12" => VK_F12,
+        "SPACE" => VK_SPACE,
+        "TAB" => VK_TAB,
+        "ESCAPE" | "ESC" => VK_ESCAPE,
+        s if s.len() == 1 => s.chars().next().unwrap() as u16,
+        _ => 'D' as u16,
+    };
+    (mods, vk as u32)
+}
 
 /// Diagnostic telemetry record capturing all 12 requested fields
 #[derive(Debug, Clone)]
@@ -72,13 +110,19 @@ pub enum WorkerMessage {
     CalibrationKeyCaptured(KeySignature),
     EmergencyReset,
     KeyboardDeviceDetected(String),
+    GlobalDeckModeToggle,
+    ForegroundAppChanged(String),
+    DeviceListChanged,
 }
 
 /// State shared between Tauri commands, Low-Level Hook, and Action Executor
 pub struct KeyboardEngineState {
     pub mode: RwLock<EngineMode>,
+    pub active_layer: RwLock<u8>,
     pub calibration: RwLock<CalibrationProfile>,
     pub active_profile: RwLock<Profile>,
+    pub all_profiles: RwLock<Vec<Profile>>,
+    pub base_profile_id: RwLock<String>,
     pub active_folder_id: RwLock<Option<String>>,
     pub pressed_keys: RwLock<HashSet<String>>,
     pub emergency_shortcut_enabled: AtomicBool,
@@ -87,23 +131,34 @@ pub struct KeyboardEngineState {
     pub last_esc_time: RwLock<Instant>,
     pub diagnostics_active: AtomicBool,
     pub target_keyboard_device: RwLock<Option<String>>,
+    pub target_device_connected: AtomicBool,
+    pub global_hotkey: RwLock<GlobalHotkeyConfig>,
+    pub auto_profile_switching: AtomicBool,
 }
 
 impl KeyboardEngineState {
     pub fn new(
         calibration: CalibrationProfile,
         default_profile: Profile,
+        all_profiles: Vec<Profile>,
         initial_deck_mode: bool,
         target_keyboard_device: Option<String>,
+        global_hotkey: GlobalHotkeyConfig,
+        auto_profile_switching: bool,
+        active_layer: u8,
     ) -> Self {
+        let base_id = default_profile.id.clone();
         Self {
             mode: RwLock::new(if initial_deck_mode {
                 EngineMode::Deck
             } else {
                 EngineMode::Normal
             }),
+            active_layer: RwLock::new(active_layer),
             calibration: RwLock::new(calibration),
             active_profile: RwLock::new(default_profile),
+            all_profiles: RwLock::new(all_profiles),
+            base_profile_id: RwLock::new(base_id),
             active_folder_id: RwLock::new(None),
             pressed_keys: RwLock::new(HashSet::new()),
             emergency_shortcut_enabled: AtomicBool::new(true),
@@ -112,6 +167,9 @@ impl KeyboardEngineState {
             last_esc_time: RwLock::new(Instant::now()),
             diagnostics_active: AtomicBool::new(true),
             target_keyboard_device: RwLock::new(target_keyboard_device),
+            target_device_connected: AtomicBool::new(true),
+            global_hotkey: RwLock::new(global_hotkey),
+            auto_profile_switching: AtomicBool::new(auto_profile_switching),
         }
     }
 }
@@ -150,6 +208,7 @@ pub fn enumerate_keyboards() -> Vec<KeyboardDeviceInfo> {
                     raw_path: path_str,
                     is_internal: false,
                     is_virtual: false,
+                    is_connected: true,
                 });
             }
         }
@@ -161,6 +220,7 @@ pub fn enumerate_keyboards() -> Vec<KeyboardDeviceInfo> {
             raw_path: "/dev/input".to_string(),
             is_internal: false,
             is_virtual: false,
+            is_connected: true,
         });
     }
     results
@@ -257,6 +317,7 @@ pub fn enumerate_keyboards() -> Vec<KeyboardDeviceInfo> {
                 raw_path,
                 is_internal,
                 is_virtual,
+                is_connected: true,
             });
         }
     }
@@ -374,14 +435,22 @@ impl KeyboardEngine {
         app_handle: AppHandle,
         calibration: CalibrationProfile,
         default_profile: Profile,
+        all_profiles: Vec<Profile>,
         initial_deck_mode: bool,
         target_keyboard_device: Option<String>,
+        global_hotkey: GlobalHotkeyConfig,
+        auto_profile_switching: bool,
+        active_layer: u8,
     ) -> Self {
         let state = Arc::new(KeyboardEngineState::new(
             calibration,
             default_profile,
+            all_profiles,
             initial_deck_mode,
             target_keyboard_device,
+            global_hotkey,
+            auto_profile_switching,
+            active_layer,
         ));
         let (worker_tx, worker_rx) = crossbeam_channel::unbounded::<WorkerMessage>();
         let hook_thread_id = Arc::new(AtomicU32::new(0));
@@ -420,6 +489,16 @@ impl KeyboardEngine {
 
     pub fn state(&self) -> Arc<KeyboardEngineState> {
         Arc::clone(&self.state)
+    }
+
+    pub fn update_global_hotkey(&self, config: GlobalHotkeyConfig) {
+        *self.state.global_hotkey.write() = config;
+        let raw_hwnd = RAW_INPUT_HWND.load(Ordering::Relaxed) as HWND;
+        if raw_hwnd != 0 as _ {
+            unsafe {
+                PostMessageW(raw_hwnd, WM_APP_UPDATE_HOTKEY, 0, 0);
+            }
+        }
     }
 }
 
@@ -463,6 +542,19 @@ fn run_worker_loop(
                             let is_deck = new_mode == EngineMode::Deck;
                             log::info!("Deck mode toggled via action to: {:?}", new_mode);
                             let _ = app.emit("deck-mode-changed", is_deck);
+                        }
+                        ActionConfig::ToggleLayer => {
+                            let mut layer = state.active_layer.write();
+                            *layer = if *layer == 0 { 1 } else { 0 };
+                            let new_layer = *layer;
+                            drop(layer);
+                            log::info!("Layer toggled to: {}", new_layer);
+                            let _ = app.emit("layer-changed", new_layer);
+                        }
+                        ActionConfig::SwitchLayer { layer: target_layer } => {
+                            *state.active_layer.write() = target_layer;
+                            log::info!("Layer switched to: {}", target_layer);
+                            let _ = app.emit("layer-changed", target_layer);
                         }
                         ActionConfig::SwitchProfile { profile_id } => {
                             log::info!("Switching profile to: {}", profile_id);
@@ -575,8 +667,63 @@ fn run_worker_loop(
                             raw_path: device_id.clone(),
                             is_internal: device_id.contains("INTERNAL"),
                             is_virtual: device_id.contains("VIRTUAL"),
+                            is_connected: true,
                         });
                     let _ = app.emit("keyboard-device-detected", detected);
+                }
+
+                WorkerMessage::GlobalDeckModeToggle => {
+                    let mut mode_guard = state.mode.write();
+                    let new_mode = match *mode_guard {
+                        EngineMode::Deck => EngineMode::Normal,
+                        _ => EngineMode::Deck,
+                    };
+                    *mode_guard = new_mode;
+                    drop(mode_guard);
+
+                    let is_deck = new_mode == EngineMode::Deck;
+                    log::info!("Global hotkey toggled Deck Mode to: {:?}", new_mode);
+                    let _ = app.emit("deck-mode-changed", is_deck);
+                }
+
+                WorkerMessage::ForegroundAppChanged(exe_name) => {
+                    if state.auto_profile_switching.load(Ordering::Relaxed) {
+                        let profiles = state.all_profiles.read();
+                        let current_active = state.active_profile.read().id.clone();
+                        let target = profiles.iter().find(|p| {
+                            if let Some(ref assoc) = p.app_association {
+                                if !assoc.trim().is_empty() {
+                                    let a_lower = assoc.trim().to_lowercase();
+                                    let e_lower = exe_name.trim().to_lowercase();
+                                    return e_lower.contains(&a_lower) || a_lower.contains(&e_lower);
+                                }
+                            }
+                            false
+                        }).cloned();
+                        drop(profiles);
+
+                        if let Some(target_profile) = target {
+                            if target_profile.id != current_active {
+                                log::info!("Auto-switched profile to '{}' ({}) for app '{}'", target_profile.name, target_profile.id, exe_name);
+                                *state.active_profile.write() = target_profile.clone();
+                                *state.active_folder_id.write() = None;
+                                let _ = app.emit("profile-switched", target_profile.id.clone());
+                            }
+                        }
+                    }
+                }
+
+                WorkerMessage::DeviceListChanged => {
+                    let keyboards = enumerate_keyboards();
+                    let target_opt = state.target_keyboard_device.read().clone();
+                    let is_connected = match target_opt.as_deref() {
+                        None | Some("all") | Some("") => true,
+                        Some(target) => keyboards.iter().any(|k| k.id.eq_ignore_ascii_case(target) || k.raw_path.contains(target)),
+                    };
+                    state.target_device_connected.store(is_connected, Ordering::SeqCst);
+                    log::info!("Device list updated. Keyboards count={}, target connected={}", keyboards.len(), is_connected);
+                    let _ = app.emit("keyboard-devices-changed", keyboards);
+                    let _ = app.emit("target-device-status", is_connected);
                 }
             }
         }
@@ -641,20 +788,71 @@ impl KeyboardEngine {
 
             log::info!("WH_KEYBOARD_LL hook successfully installed with hMod on thread {}", tid);
 
+            // 3. Register global hotkey if enabled
+            if raw_hwnd != 0 as _ {
+                let hook_guard = HOOK_DATA.read();
+                if let Some(ref data) = *hook_guard {
+                    let config = data.state.global_hotkey.read().clone();
+                    if config.enabled {
+                        let (mods, vk) = parse_modifiers_and_vk(&config);
+                        let reg = RegisterHotKey(raw_hwnd, GLOBAL_HOTKEY_ID, mods, vk);
+                        log::info!("Registered global hotkey (mods=0x{:X}, vk=0x{:X}): success={}", mods, vk, reg != 0);
+                    }
+                }
+            }
+
+            // 4. Install EVENT_SYSTEM_FOREGROUND hook for zero-overhead automatic profile switching
+            let winevent_hook = SetWinEventHook(
+                EVENT_SYSTEM_FOREGROUND,
+                EVENT_SYSTEM_FOREGROUND,
+                std::ptr::null_mut(),
+                Some(win_event_proc),
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            );
+
             let mut msg: MSG = std::mem::zeroed();
             while GetMessageW(&mut msg, 0 as _, 0, 0) > 0 {
                 if msg.message == WM_INPUT {
                     let hook_guard = HOOK_DATA.read();
                     let worker_tx = hook_guard.as_ref().map(|d| &d.worker_tx);
                     process_raw_input_lparam(msg.lParam, worker_tx);
+                } else if msg.message == WM_HOTKEY {
+                    if msg.wParam as i32 == GLOBAL_HOTKEY_ID {
+                        let hook_guard = HOOK_DATA.read();
+                        if let Some(ref data) = *hook_guard {
+                            let _ = data.worker_tx.send(WorkerMessage::GlobalDeckModeToggle);
+                        }
+                    }
+                } else if msg.message == WM_DEVICECHANGE {
+                    let hook_guard = HOOK_DATA.read();
+                    if let Some(ref data) = *hook_guard {
+                        let _ = data.worker_tx.send(WorkerMessage::DeviceListChanged);
+                    }
+                } else if msg.message == WM_APP_UPDATE_HOTKEY && raw_hwnd != 0 as _ {
+                    UnregisterHotKey(raw_hwnd, GLOBAL_HOTKEY_ID);
+                    let hook_guard = HOOK_DATA.read();
+                    if let Some(ref data) = *hook_guard {
+                        let config = data.state.global_hotkey.read().clone();
+                        if config.enabled {
+                            let (mods, vk) = parse_modifiers_and_vk(&config);
+                            let reg = RegisterHotKey(raw_hwnd, GLOBAL_HOTKEY_ID, mods, vk);
+                            log::info!("Updated global hotkey: success={}", reg != 0);
+                        }
+                    }
                 }
                 TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
 
-            log::info!("Unhooking WH_KEYBOARD_LL...");
+            log::info!("Unhooking WH_KEYBOARD_LL, WinEventHook, and HotKey...");
             UnhookWindowsHookEx(hook);
+            if winevent_hook != 0 as _ {
+                UnhookWinEvent(winevent_hook);
+            }
             if raw_hwnd != 0 as _ {
+                UnregisterHotKey(raw_hwnd, GLOBAL_HOTKEY_ID);
                 DestroyWindow(raw_hwnd);
                 RAW_INPUT_HWND.store(std::ptr::null_mut(), Ordering::SeqCst);
             }
@@ -668,6 +866,43 @@ impl KeyboardEngine {
         if tid != 0 {
             unsafe {
                 PostThreadMessageW(tid, WM_QUIT, 0, 0);
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn win_event_proc(
+    _h_hook: HWINEVENTHOOK,
+    event: u32,
+    hwnd: HWND,
+    _id_object: i32,
+    _id_child: i32,
+    _id_thread: u32,
+    _dw_time: u32,
+) {
+    unsafe {
+        if event == EVENT_SYSTEM_FOREGROUND && hwnd != 0 as _ {
+            let mut pid = 0u32;
+            GetWindowThreadProcessId(hwnd, &mut pid);
+            let my_pid = GetCurrentProcessId();
+            if pid != 0 && pid != my_pid {
+                let hproc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+                if hproc != 0 as _ {
+                    let mut buf = [0u16; 512];
+                    let mut size = 512u32;
+                    if QueryFullProcessImageNameW(hproc, 0, buf.as_mut_ptr(), &mut size) != 0 && size > 0 {
+                        let full_path = String::from_utf16_lossy(&buf[..size as usize]);
+                        if let Some(exe_name) = std::path::Path::new(&full_path).file_name() {
+                            let name = exe_name.to_string_lossy().to_string();
+                            let hook_guard = HOOK_DATA.read();
+                            if let Some(ref data) = *hook_guard {
+                                let _ = data.worker_tx.send(WorkerMessage::ForegroundAppChanged(name));
+                            }
+                        }
+                    }
+                    CloseHandle(hproc);
+                }
             }
         }
     }
@@ -811,6 +1046,29 @@ unsafe extern "system" fn low_level_keyboard_proc(
         let target_device = hook_data.state.target_keyboard_device.read().clone();
         if let Some(ref target) = target_device {
             if target != "all" && !target.is_empty() {
+                if !hook_data.state.target_device_connected.load(Ordering::Relaxed) {
+                    // Target keyboard is currently unplugged/disconnected; pass through all keys safely!
+                    let duration_us = hook_start.elapsed().as_micros() as u64;
+                    let _ = hook_data.worker_tx.send(WorkerMessage::Telemetry(TelemetryRecord {
+                        timestamp_ms: current_time_ms(),
+                        fg_window,
+                        fg_pid,
+                        is_self_foreground,
+                        vk_code,
+                        vk_name: vk_code_to_name(vk_code),
+                        scan_code,
+                        is_extended,
+                        is_key_down,
+                        is_injected: false,
+                        numlock_on,
+                        matched_logical_key: None,
+                        deck_mode_enabled: false,
+                        event_suppressed: false,
+                        queued_action: None,
+                        hook_duration_us: duration_us,
+                    }));
+                    return CallNextHookEx(0 as _, n_code, w_param, l_param);
+                }
                 let current_dev = LAST_HARDWARE_KEYBOARD.read().clone().unwrap_or_default();
                 // If device is known and DOES NOT match target, pass through to Windows immediately
                 if !current_dev.is_empty() && !current_dev.eq_ignore_ascii_case(target) && !current_dev.contains(target) {
@@ -878,16 +1136,21 @@ unsafe extern "system" fn low_level_keyboard_proc(
             if let Some(key_id) = matched_key {
                 let profile = hook_data.state.active_profile.read();
                 let active_folder = hook_data.state.active_folder_id.read();
+                let active_layer = *hook_data.state.active_layer.read();
 
-                let assignment = if let Some(folder_id) = active_folder.as_ref() {
-                    profile
-                        .folders
-                        .iter()
-                        .find(|f| f.id == *folder_id)
-                        .and_then(|f| f.keys.get(&key_id))
-                        .or_else(|| profile.keys.get(&key_id))
+                let assignment = if active_layer == 1 {
+                    profile.layer_b_keys.get(&key_id).or_else(|| profile.keys.get(&key_id))
                 } else {
-                    profile.keys.get(&key_id)
+                    if let Some(folder_id) = active_folder.as_ref() {
+                        profile
+                            .folders
+                            .iter()
+                            .find(|f| f.id == *folder_id)
+                            .and_then(|f| f.keys.get(&key_id))
+                            .or_else(|| profile.keys.get(&key_id))
+                    } else {
+                        profile.keys.get(&key_id)
+                    }
                 };
 
                 // Check if key is configured for passthrough or has no action (default physical key)
@@ -1137,14 +1400,22 @@ impl KeyboardEngine {
         app_handle: AppHandle,
         calibration: CalibrationProfile,
         default_profile: Profile,
+        all_profiles: Vec<Profile>,
         initial_deck_mode: bool,
         target_keyboard_device: Option<String>,
+        global_hotkey: GlobalHotkeyConfig,
+        auto_profile_switching: bool,
+        active_layer: u8,
     ) -> Self {
         let state = Arc::new(KeyboardEngineState::new(
             calibration,
             default_profile,
+            all_profiles,
             initial_deck_mode,
             target_keyboard_device,
+            global_hotkey,
+            auto_profile_switching,
+            active_layer,
         ));
         let (worker_tx, worker_rx) = crossbeam_channel::unbounded::<WorkerMessage>();
         let stop_flag = Arc::new(AtomicBool::new(false));
@@ -1179,6 +1450,10 @@ impl KeyboardEngine {
 
     pub fn state(&self) -> Arc<KeyboardEngineState> {
         Arc::clone(&self.state)
+    }
+
+    pub fn update_global_hotkey(&self, config: GlobalHotkeyConfig) {
+        *self.state.global_hotkey.write() = config;
     }
 
     pub fn shutdown(&self) {

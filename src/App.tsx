@@ -148,6 +148,8 @@ export const App: React.FC = () => {
   const [activeTriggeredKeyId, setActiveTriggeredKeyId] = useState<string | null>(null);
   const [connectedKeyboards, setConnectedKeyboards] = useState<KeyboardDeviceInfo[]>([]);
   const [isDetectingKeyboard, setIsDetectingKeyboard] = useState<boolean>(false);
+  const [activeLayer, setActiveLayer] = useState<number>(0);
+  const [isTargetDeviceConnected, setIsTargetDeviceConnected] = useState<boolean>(true);
 
   // Modals
   const [isActionModalOpen, setIsActionModalOpen] = useState(false);
@@ -196,6 +198,9 @@ export const App: React.FC = () => {
         const nlState = await invoke<boolean>('get_numlock_state');
         setNumLockOn(nlState);
 
+        const currentLayer = await invoke<number>('get_active_layer').catch(() => data.settings.active_layer || 0);
+        setActiveLayer(currentLayer);
+
         await refreshConnectedKeyboards();
 
         // Show onboarding only if never seen / completed
@@ -218,10 +223,14 @@ export const App: React.FC = () => {
     let unlistenMode: (() => void) | undefined;
     let unlistenTriggered: (() => void) | undefined;
     let unlistenProfile: (() => void) | undefined;
+    let unlistenRequestProfile: (() => void) | undefined;
     let unlistenFolder: (() => void) | undefined;
     let unlistenEmergency: (() => void) | undefined;
     let unlistenProfilesUpdated: (() => void) | undefined;
     let unlistenKeyboardDetected: (() => void) | undefined;
+    let unlistenLayerChanged: (() => void) | undefined;
+    let unlistenDevicesChanged: (() => void) | undefined;
+    let unlistenTargetStatus: (() => void) | undefined;
 
     const setupListeners = async () => {
       unlistenMode = await listen<boolean>('deck-mode-changed', (e) => {
@@ -246,6 +255,22 @@ export const App: React.FC = () => {
             settings: { ...appData.settings, active_profile_id: e.payload },
           });
         }
+      });
+
+      unlistenRequestProfile = await listen<string>('request-switch-profile', (e) => {
+        handleSelectProfile(e.payload);
+      });
+
+      unlistenLayerChanged = await listen<number>('layer-changed', (e) => {
+        setActiveLayer(e.payload);
+      });
+
+      unlistenDevicesChanged = await listen<KeyboardDeviceInfo[]>('keyboard-devices-changed', (e) => {
+        setConnectedKeyboards(e.payload);
+      });
+
+      unlistenTargetStatus = await listen<boolean>('target-device-status', (e) => {
+        setIsTargetDeviceConnected(e.payload);
       });
 
       unlistenFolder = await listen<string | undefined>('folder-changed', (e) => {
@@ -303,6 +328,10 @@ export const App: React.FC = () => {
       if (unlistenMode) unlistenMode();
       if (unlistenTriggered) unlistenTriggered();
       if (unlistenProfile) unlistenProfile();
+      if (unlistenRequestProfile) unlistenRequestProfile();
+      if (unlistenLayerChanged) unlistenLayerChanged();
+      if (unlistenDevicesChanged) unlistenDevicesChanged();
+      if (unlistenTargetStatus) unlistenTargetStatus();
       if (unlistenFolder) unlistenFolder();
       if (unlistenEmergency) unlistenEmergency();
       if (unlistenProfilesUpdated) unlistenProfilesUpdated();
@@ -420,16 +449,34 @@ export const App: React.FC = () => {
     }
   };
 
+  // Switch active layer (Layer A = 0, Layer B = 1)
+  const handleSwitchLayer = async (layer: number) => {
+    setActiveLayer(layer);
+    try {
+      await invoke('set_active_layer', { layer });
+    } catch (err) {
+      console.warn('Failed to set active layer in backend:', err);
+    }
+  };
+
   // Save key assignment
   const handleSaveKeyAssignment = async (assignment: KeyAssignment) => {
     if (!appData) return;
     const activeProf = appData.profiles.find((p) => p.id === appData.settings.active_profile_id);
     if (!activeProf) return;
 
-    const updatedKeys = { ...activeProf.keys, [assignment.key_id]: assignment };
-    const updatedProfiles = appData.profiles.map((p) =>
-      p.id === activeProf.id ? { ...p, keys: updatedKeys } : p
-    );
+    let updatedProfiles: Profile[];
+    if (activeLayer === 1) {
+      const updatedLayerB = { ...(activeProf.layer_b_keys || {}), [assignment.key_id]: assignment };
+      updatedProfiles = appData.profiles.map((p) =>
+        p.id === activeProf.id ? { ...p, layer_b_keys: updatedLayerB } : p
+      );
+    } else {
+      const updatedKeys = { ...activeProf.keys, [assignment.key_id]: assignment };
+      updatedProfiles = appData.profiles.map((p) =>
+        p.id === activeProf.id ? { ...p, keys: updatedKeys } : p
+      );
+    }
 
     await handleSaveProfiles(updatedProfiles);
     setIsActionModalOpen(false);
@@ -441,12 +488,20 @@ export const App: React.FC = () => {
     const activeProf = appData.profiles.find((p) => p.id === appData.settings.active_profile_id);
     if (!activeProf) return;
 
-    const updatedKeys = { ...activeProf.keys };
-    delete updatedKeys[selectedKeyId];
-
-    const updatedProfiles = appData.profiles.map((p) =>
-      p.id === activeProf.id ? { ...p, keys: updatedKeys } : p
-    );
+    let updatedProfiles: Profile[];
+    if (activeLayer === 1) {
+      const updatedLayerB = { ...(activeProf.layer_b_keys || {}) };
+      delete updatedLayerB[selectedKeyId];
+      updatedProfiles = appData.profiles.map((p) =>
+        p.id === activeProf.id ? { ...p, layer_b_keys: updatedLayerB } : p
+      );
+    } else {
+      const updatedKeys = { ...activeProf.keys };
+      delete updatedKeys[selectedKeyId];
+      updatedProfiles = appData.profiles.map((p) =>
+        p.id === activeProf.id ? { ...p, keys: updatedKeys } : p
+      );
+    }
 
     await handleSaveProfiles(updatedProfiles);
   };
@@ -504,7 +559,9 @@ export const App: React.FC = () => {
 
   const currentProfile =
     appData.profiles.find((p) => p.id === appData.settings.active_profile_id) || appData.profiles[0];
-  const currentAssignments = currentProfile?.keys || {};
+  const currentAssignments = activeLayer === 1
+    ? (currentProfile?.layer_b_keys || {})
+    : (currentProfile?.keys || {});
   const selectedAssignment = selectedKeyId ? currentAssignments[selectedKeyId] : undefined;
 
   const handleCopyAction = () => {
@@ -580,6 +637,11 @@ export const App: React.FC = () => {
               onOpenCalibration={() => setIsCalibrationOpen(true)}
               targetKeyboardDevice={appData.settings.target_keyboard_device}
               connectedKeyboards={connectedKeyboards}
+              activeLayer={activeLayer}
+              onSwitchLayer={handleSwitchLayer}
+              globalHotkey={appData.settings.global_hotkey}
+              onOpenSettings={() => setCurrentTab('settings')}
+              isTargetConnected={isTargetDeviceConnected}
             />
 
             {/* Notification Banner */}
@@ -604,6 +666,8 @@ export const App: React.FC = () => {
                 activeTriggeredKeyId={activeTriggeredKeyId}
                 isDeckMode={isDeckMode}
                 profileName={currentProfile?.name || 'General'}
+                activeLayer={activeLayer}
+                onSwitchLayer={handleSwitchLayer}
               />
 
               <KeyInspector
@@ -637,6 +701,19 @@ export const App: React.FC = () => {
             isDetectingKeyboard={isDetectingKeyboard}
             onStartDetectingKeyboard={handleStartDetectingKeyboard}
             onStopDetectingKeyboard={handleStopDetectingKeyboard}
+            isDeckMode={isDeckMode}
+            onToggleDeckMode={handleToggleDeckMode}
+            onTestEmergencyDisarm={async () => {
+              try {
+                await invoke('set_engine_mode', { mode: 'Normal' });
+                setIsDeckMode(false);
+                setBannerNotice('Emergency Disarm: Deck Mode deactivated.');
+                setTimeout(() => setBannerNotice(null), 4000);
+              } catch (e) {
+                console.error(e);
+              }
+            }}
+            isTargetConnected={isTargetDeviceConnected}
           />
         )}
       </div>

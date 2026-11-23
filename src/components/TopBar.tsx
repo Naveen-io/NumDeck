@@ -1,5 +1,5 @@
 import React from 'react';
-import { Profile, KeyboardDeviceInfo } from '../types';
+import { Profile, KeyboardDeviceInfo, GlobalHotkeyConfig } from '../types';
 import { 
   ChevronDown, 
   Folder, 
@@ -24,6 +24,11 @@ interface TopBarProps {
   onOpenCalibration: () => void;
   targetKeyboardDevice?: string;
   connectedKeyboards?: KeyboardDeviceInfo[];
+  activeLayer?: number;
+  onSwitchLayer?: (layer: number) => void;
+  globalHotkey?: GlobalHotkeyConfig;
+  onOpenSettings?: () => void;
+  isTargetConnected?: boolean;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -40,6 +45,11 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenCalibration,
   targetKeyboardDevice,
   connectedKeyboards,
+  activeLayer = 0,
+  onSwitchLayer,
+  globalHotkey,
+  onOpenSettings,
+  isTargetConnected = true,
 }) => {
   const currentProfile = profiles.find((p) => p.id === activeProfileId) || profiles[0];
   const currentFolder = activeFolderId && currentProfile
@@ -48,10 +58,11 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   const activeDevice = connectedKeyboards?.find((k) => k.id === targetKeyboardDevice);
   const activeDeviceName = activeDevice ? activeDevice.name : (targetKeyboardDevice || 'All Keyboards');
+  const isIsolated = targetKeyboardDevice && targetKeyboardDevice !== 'all';
 
   return (
     <header className="h-14 border-b border-[#1F2532] bg-[#0B0D12] px-6 flex items-center justify-between shrink-0 select-none">
-      {/* Profile & Navigation Breadcrumb */}
+      {/* Profile, Layers & Navigation Breadcrumb */}
       <div className="flex items-center gap-3">
         {/* Profile Dropdown */}
         <div className="relative flex items-center">
@@ -87,6 +98,36 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         )}
 
+        {/* Layer Switcher Pill */}
+        {onSwitchLayer && (
+          <div className="flex items-center p-0.5 bg-[#131722] border border-[#202736] rounded-lg">
+            <button
+              type="button"
+              onClick={() => onSwitchLayer(0)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                activeLayer === 0
+                  ? 'bg-[#3B82F6] text-white shadow-sm'
+                  : 'text-[#94A3B8] hover:text-[#F1F5F9]'
+              }`}
+              title="Primary Layer A (Standard bindings)"
+            >
+              Layer A
+            </button>
+            <button
+              type="button"
+              onClick={() => onSwitchLayer(1)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all cursor-pointer ${
+                activeLayer === 1
+                  ? 'bg-[#8B5CF6] text-white shadow-sm'
+                  : 'text-[#94A3B8] hover:text-[#F1F5F9]'
+              }`}
+              title="Secondary Layer B (Alternative bindings)"
+            >
+              Layer B
+            </button>
+          </div>
+        )}
+
         {/* Sub-Deck Folder Breadcrumb */}
         {currentFolder && (
           <div className="flex items-center gap-2 text-xs text-[#94A3B8]">
@@ -105,16 +146,44 @@ export const TopBar: React.FC<TopBarProps> = ({
 
       {/* Hardware Status & Controls */}
       <div className="flex items-center gap-3">
-        {/* Target Keyboard Filter Pill */}
+        {/* Global Hotkey Badge */}
+        {globalHotkey && globalHotkey.enabled && (
+          <button
+            onClick={onOpenSettings}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border bg-[#131722] hover:bg-[#181E2C] border-[#202736] text-[#94A3B8] hover:text-[#F1F5F9] cursor-pointer transition-colors"
+            title="Global Deck Mode Toggle Shortcut (Click to customize in Settings)"
+          >
+            <span className="text-[10px] text-[#64748B] uppercase font-bold">Hotkey:</span>
+            <span className="text-[#3B82F6] font-mono text-[11px] font-bold">
+              {[...globalHotkey.modifiers.map((m) => m.toUpperCase()), globalHotkey.key].join('+')}
+            </span>
+          </button>
+        )}
+
+        {/* Target Keyboard Filter Pill with Live Connection Status */}
         <div 
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border bg-[#131722] border-[#202736]"
-          title={targetKeyboardDevice && targetKeyboardDevice !== 'all' ? `Isolated to: ${activeDeviceName}` : 'Affects all connected keyboards'}
+          title={
+            isIsolated
+              ? (isTargetConnected 
+                  ? `Isolated to: ${activeDeviceName} (Connected)` 
+                  : `Isolated to: ${activeDeviceName} (Disconnected — Pass-through active)`)
+              : 'Affects all connected keyboards'
+          }
         >
-          <Keyboard size={13} className={targetKeyboardDevice && targetKeyboardDevice !== 'all' ? 'text-[#3B82F6]' : 'text-[#64748B]'} />
+          <Keyboard 
+            size={13} 
+            className={
+              isIsolated 
+                ? (isTargetConnected ? 'text-[#3B82F6]' : 'text-[#F59E0B]') 
+                : 'text-[#64748B]'
+            } 
+          />
           <span className="text-[#64748B] font-semibold text-[11px]">
-            Device: <strong className={targetKeyboardDevice && targetKeyboardDevice !== 'all' ? 'text-[#3B82F6]' : 'text-[#94A3B8]'}>
-              {targetKeyboardDevice && targetKeyboardDevice !== 'all'
-                ? (activeDeviceName.length > 18 ? activeDeviceName.slice(0, 18) + '...' : activeDeviceName)
+            Device:{' '}
+            <strong className={isIsolated ? (isTargetConnected ? 'text-[#3B82F6]' : 'text-[#F59E0B]') : 'text-[#94A3B8]'}>
+              {isIsolated
+                ? (activeDeviceName.length > 16 ? activeDeviceName.slice(0, 16) + '...' : activeDeviceName) + (isTargetConnected ? '' : ' ⚠️')
                 : 'All'}
             </strong>
           </span>
@@ -156,9 +225,9 @@ export const TopBar: React.FC<TopBarProps> = ({
             onToggleDeckMode();
             e.currentTarget.blur();
           }}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer transition-all ${
             isDeckMode
-              ? 'bg-[#1D4ED8] hover:bg-[#2563EB] text-white border-[#3B82F6]'
+              ? 'bg-[#1D4ED8] hover:bg-[#2563EB] text-white border-[#3B82F6] shadow-md shadow-blue-500/20'
               : 'bg-[#131722] hover:bg-[#181E2C] text-[#CBD5E1] border-[#202736]'
           }`}
         >

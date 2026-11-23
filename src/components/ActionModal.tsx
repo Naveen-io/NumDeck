@@ -50,7 +50,7 @@ const PRESET_COLORS = [
   '#397BFF', '#65C991', '#E9B86A', '#ED7777', '#5865F2', '#1DB954', '#007ACC', '#4EC9B0', '#FF0000', '#9146FF', '#FFFFFF'
 ];
 
-type ActionCategory = 'launch' | 'open' | 'hotkey' | 'text' | 'media' | 'multi' | 'nav' | 'passthrough';
+type ActionCategory = 'launch' | 'open' | 'hotkey' | 'text' | 'media' | 'layer' | 'multi' | 'nav' | 'passthrough';
 
 export const ActionModal: React.FC<ActionModalProps> = ({
   keyId,
@@ -147,6 +147,8 @@ export const ActionModal: React.FC<ActionModalProps> = ({
       case 'TypeText': return 'text';
       case 'SystemMedia': return 'media';
       case 'MultiAction': return 'multi';
+      case 'ToggleLayer':
+      case 'SwitchLayer': return 'layer';
       case 'SwitchProfile':
       case 'NavigateFolder':
       case 'ToggleDeckMode':
@@ -198,6 +200,12 @@ export const ActionModal: React.FC<ActionModalProps> = ({
 
   const [navTargetProfile, setNavTargetProfile] = useState(
     initialAssignment?.action?.type === 'SwitchProfile' ? initialAssignment.action.payload.profile_id : profiles[0]?.id || 'general'
+  );
+
+  const [layerActionType, setLayerActionType] = useState<'toggle' | 'layer_a' | 'layer_b'>(
+    initialAssignment?.action?.type === 'SwitchLayer'
+      ? (initialAssignment.action.payload.layer === 1 ? 'layer_b' : 'layer_a')
+      : 'toggle'
   );
 
   // Browse executable via native Windows file dialog
@@ -270,6 +278,14 @@ export const ActionModal: React.FC<ActionModalProps> = ({
           type: 'SwitchProfile',
           payload: { profile_id: navTargetProfile },
         };
+      case 'layer':
+        if (layerActionType === 'toggle') {
+          return { type: 'ToggleLayer' };
+        } else if (layerActionType === 'layer_a') {
+          return { type: 'SwitchLayer', payload: { layer: 0 } };
+        } else {
+          return { type: 'SwitchLayer', payload: { layer: 1 } };
+        }
       case 'passthrough':
         return {
           type: 'Passthrough',
@@ -511,13 +527,14 @@ export const ActionModal: React.FC<ActionModalProps> = ({
             <label className="text-[11px] font-mono font-bold text-[#929CAC] uppercase block mb-1.5">
               Action Category
             </label>
-            <div className="grid grid-cols-4 gap-1.5 p-1 rounded-xl bg-[#12151C] border border-[#252C39]">
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 p-1 rounded-xl bg-[#12151C] border border-[#252C39]">
               {[
                 { id: 'launch', label: 'App Launch', icon: Laptop },
                 { id: 'open', label: 'Open Path', icon: FolderOpen },
                 { id: 'hotkey', label: 'Hotkey', icon: KeyIcon },
                 { id: 'media', label: 'Media', icon: Music },
                 { id: 'text', label: 'Type Text', icon: ExternalLink },
+                { id: 'layer', label: 'Layer Switch', icon: Layers },
                 { id: 'multi', label: 'Multi-Action', icon: Layers },
                 { id: 'nav', label: 'Profile', icon: ArrowRight },
                 { id: 'passthrough', label: 'Default Key', icon: KeyIcon },
@@ -720,6 +737,70 @@ export const ActionModal: React.FC<ActionModalProps> = ({
                       </button>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {category === 'layer' && (
+              <div className="space-y-3">
+                <label className="text-xs font-medium text-[#929CAC] block">Two-Layer Operation</label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2.5 p-3 rounded-lg bg-[#08090C] border border-[#252C39] cursor-pointer hover:border-[#397BFF]">
+                    <input
+                      type="radio"
+                      name="layerAction"
+                      checked={layerActionType === 'toggle'}
+                      onChange={() => {
+                        setLayerActionType('toggle');
+                        if (!label || label === 'New Action') setLabel('Toggle Layer');
+                        setIcon('Layers');
+                        setColor('#8B5CF6');
+                      }}
+                      className="text-[#397BFF]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-[#F4F6FA] block">Toggle Layer A / Layer B</span>
+                      <span className="text-[11px] text-[#929CAC] block">Pressing this key alternates between Primary (Layer A) and Secondary (Layer B) keypads.</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-3 rounded-lg bg-[#08090C] border border-[#252C39] cursor-pointer hover:border-[#397BFF]">
+                    <input
+                      type="radio"
+                      name="layerAction"
+                      checked={layerActionType === 'layer_a'}
+                      onChange={() => {
+                        setLayerActionType('layer_a');
+                        if (!label || label === 'New Action') setLabel('Layer A');
+                        setIcon('Layers');
+                        setColor('#8B5CF6');
+                      }}
+                      className="text-[#397BFF]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-[#F4F6FA] block">Switch to Layer A (Primary)</span>
+                      <span className="text-[11px] text-[#929CAC] block">Directly activates Layer A key assignments.</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-3 rounded-lg bg-[#08090C] border border-[#252C39] cursor-pointer hover:border-[#397BFF]">
+                    <input
+                      type="radio"
+                      name="layerAction"
+                      checked={layerActionType === 'layer_b'}
+                      onChange={() => {
+                        setLayerActionType('layer_b');
+                        if (!label || label === 'New Action') setLabel('Layer B');
+                        setIcon('Layers');
+                        setColor('#8B5CF6');
+                      }}
+                      className="text-[#397BFF]"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-[#F4F6FA] block">Switch to Layer B (Secondary)</span>
+                      <span className="text-[11px] text-[#929CAC] block">Directly activates Layer B key assignments.</span>
+                    </div>
+                  </label>
                 </div>
               </div>
             )}

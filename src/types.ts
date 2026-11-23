@@ -32,6 +32,8 @@ export type ActionConfig =
   | { type: 'NavigateFolder'; payload: { folder_id: string } }
   | { type: 'BackToRootFolder'; payload?: undefined }
   | { type: 'ToggleDeckMode'; payload?: undefined }
+  | { type: 'ToggleLayer'; payload?: undefined }
+  | { type: 'SwitchLayer'; payload: { layer: number } }
   | { type: 'Passthrough'; payload?: undefined };
 
 export interface ActionStep {
@@ -58,6 +60,7 @@ export interface Profile {
   name: string;
   icon: string;
   keys: Record<string, KeyAssignment>;
+  layer_b_keys?: Record<string, KeyAssignment>;
   folders: DeckFolder[];
   app_association?: string;
 }
@@ -68,6 +71,13 @@ export interface KeyboardDeviceInfo {
   raw_path: string;
   is_internal: boolean;
   is_virtual: boolean;
+  is_connected?: boolean;
+}
+
+export interface GlobalHotkeyConfig {
+  enabled: boolean;
+  modifiers: string[]; // ['ctrl', 'shift']
+  key: string;         // 'D'
 }
 
 export interface AppSettings {
@@ -79,6 +89,9 @@ export interface AppSettings {
   run_at_startup: boolean;
   minimize_to_tray: boolean;
   target_keyboard_device?: string;
+  global_hotkey?: GlobalHotkeyConfig;
+  auto_profile_switching?: boolean;
+  active_layer?: number;
 }
 
 export interface CalibrationProfile {

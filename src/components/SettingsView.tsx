@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Sliders, 
   Keyboard, 
@@ -11,9 +11,12 @@ import {
   Crosshair,
   Radio,
   Usb,
-  Laptop
+  Laptop,
+  Command,
+  Zap,
+  ShieldAlert
 } from 'lucide-react';
-import { AppSettings, CalibrationProfile, KeyboardDeviceInfo } from '../types';
+import { AppSettings, CalibrationProfile, KeyboardDeviceInfo, GlobalHotkeyConfig } from '../types';
 
 interface SettingsViewProps {
   settings: AppSettings;
@@ -27,6 +30,10 @@ interface SettingsViewProps {
   isDetectingKeyboard?: boolean;
   onStartDetectingKeyboard?: () => void;
   onStopDetectingKeyboard?: () => void;
+  isDeckMode?: boolean;
+  onToggleDeckMode?: () => void;
+  onTestEmergencyDisarm?: () => void;
+  isTargetConnected?: boolean;
 }
 
 type SettingsSection = 'general' | 'input' | 'appearance' | 'about';
@@ -43,9 +50,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   isDetectingKeyboard = false,
   onStartDetectingKeyboard,
   onStopDetectingKeyboard,
+  isDeckMode = false,
+  onToggleDeckMode,
+  onTestEmergencyDisarm,
+  isTargetConnected = true,
 }) => {
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [recordingHotkey, setRecordingHotkey] = useState(false);
 
   const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     const updated = { ...settings, [key]: value };
@@ -58,7 +70,69 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setSaveNotice(null), 2500);
   };
 
+  // Shortcut Recording Listener
+  useEffect(() => {
+    if (!recordingHotkey) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Ignore bare modifier presses
+      if (['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+        return;
+      }
+
+      const mods: string[] = [];
+      if (e.ctrlKey) mods.push('ctrl');
+      if (e.altKey) mods.push('alt');
+      if (e.shiftKey) mods.push('shift');
+      if (e.metaKey) mods.push('win');
+
+      let keyName = e.key.toUpperCase();
+      if (keyName === ' ') keyName = 'SPACE';
+      else if (keyName === 'ESCAPE') keyName = 'ESC';
+
+      // Require at least one modifier key to prevent locking standard keys
+      if (mods.length === 0) {
+        showNotice('Shortcut must include at least one modifier (Ctrl, Alt, or Shift)');
+        return;
+      }
+
+      // Disallow plain Escape or triple-Escape conflict
+      if (keyName === 'ESC' && mods.length === 0) {
+        showNotice('Escape alone is reserved for Emergency Disarm');
+        return;
+      }
+
+      const newHotkey: GlobalHotkeyConfig = {
+        enabled: true,
+        modifiers: mods,
+        key: keyName,
+      };
+
+      updateSetting('global_hotkey', newHotkey);
+      setRecordingHotkey(false);
+      showNotice(`Global hotkey saved: ${[...mods.map((m) => m.toUpperCase()), keyName].join('+')}`);
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [recordingHotkey]);
+
   const isCalibratedCustom = calibration?.is_completed && !!calibration.calibrated_at;
+
+  const currentHotkey = settings.global_hotkey || {
+    enabled: true,
+    modifiers: ['ctrl', 'shift'],
+    key: 'D',
+  };
+
+  const hotkeyDisplay = [...currentHotkey.modifiers.map((m) => m.toUpperCase()), currentHotkey.key].join(' + ');
+
+  const activeDevice = connectedKeyboards.find((k) => k.id === settings.target_keyboard_device);
+  const activeDeviceName = activeDevice ? activeDevice.name : (settings.target_keyboard_device || 'All Keyboards');
+  const isIsolated = settings.target_keyboard_device && settings.target_keyboard_device !== 'all';
 
   return (
     <div className="flex-1 flex flex-col h-screen overflow-hidden bg-[#08090C] text-[#F4F6FA] select-none">
@@ -66,7 +140,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <header className="h-14 px-8 border-b border-[#1F2532] bg-[#0B0D12] flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-sm font-bold text-[#F4F6FA]">Settings</h1>
-          <span className="text-[11px] text-[#64748B]">Application and hardware preferences</span>
+          <span className="text-[11px] text-[#64748B]">Application, shortcut, and hardware preferences</span>
         </div>
 
         {saveNotice && (
@@ -137,10 +211,153 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="space-y-6">
               <div>
                 <h2 className="text-base font-bold text-[#F8FAFC]">General Preferences</h2>
-                <p className="text-xs text-[#94A3B8]">Configure launch behavior and application preferences.</p>
+                <p className="text-xs text-[#94A3B8]">Configure global activation, automatic profile switching, and app behavior.</p>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Global Deck Mode Hotkey Card */}
+                <div className="p-5 rounded-xl bg-[#111520] border border-[#202736] space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Command size={16} className="text-[#3B82F6]" />
+                        <h3 className="text-sm font-bold text-[#F1F5F9]">Global Deck Mode Hotkey</h3>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                          isDeckMode 
+                            ? 'bg-[#3B82F6]/15 text-[#60A5FA] border-[#3B82F6]/30' 
+                            : 'bg-[#1E2533] text-[#94A3B8] border-[#2A3447]'
+                        }`}>
+                          Current State: {isDeckMode ? 'Deck Mode ON' : 'Normal Mode'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#94A3B8] leading-relaxed">
+                        Activate or deactivate NumDeck from anywhere in Windows with a global system hotkey.
+                        When Deck Mode is disabled, your physical numpad behaves 100% normally.
+                      </p>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={currentHotkey.enabled}
+                        onChange={(e) => updateSetting('global_hotkey', { ...currentHotkey, enabled: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-5 bg-[#1F2637] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2563EB]"></div>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <div className="flex-1 px-3 py-2 bg-[#0C0F17] border border-[#1E2535] rounded-lg flex items-center justify-between">
+                      <span className="text-xs text-[#64748B] font-medium">Assigned Shortcut:</span>
+                      <span className="text-xs font-mono font-bold text-[#3B82F6] bg-[#162033] px-2.5 py-1 rounded border border-[#2B3A54]">
+                        {hotkeyDisplay}
+                      </span>
+                    </div>
+
+                    {recordingHotkey ? (
+                      <button
+                        onClick={() => setRecordingHotkey(false)}
+                        className="py-2 px-3.5 rounded-lg bg-[#EF4444] hover:bg-[#DC2626] text-white text-xs font-bold cursor-pointer shrink-0 animate-pulse"
+                      >
+                        Press any combo... (Cancel)
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setRecordingHotkey(true)}
+                        disabled={!currentHotkey.enabled}
+                        className={`py-2 px-3.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer shrink-0 ${
+                          currentHotkey.enabled
+                            ? 'bg-[#182030] hover:bg-[#222C42] border-[#2B3A54] text-[#E2E8F0]'
+                            : 'bg-[#121620] border-[#1E2535] text-[#475569] cursor-not-allowed'
+                        }`}
+                      >
+                        Record Shortcut
+                      </button>
+                    )}
+
+                    {onToggleDeckMode && (
+                      <button
+                        onClick={onToggleDeckMode}
+                        className={`py-2 px-3.5 rounded-lg text-xs font-bold border cursor-pointer shrink-0 transition-colors ${
+                          isDeckMode
+                            ? 'bg-[#1D4ED8] hover:bg-[#2563EB] text-white border-[#3B82F6]'
+                            : 'bg-[#131722] hover:bg-[#181E2C] text-[#CBD5E1] border-[#202736]'
+                        }`}
+                      >
+                        {isDeckMode ? 'Turn OFF' : 'Turn ON'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Automatic Profile Switching Card */}
+                <div className="p-5 rounded-xl bg-[#111520] border border-[#202736] space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Zap size={16} className="text-[#EAB308]" />
+                        <h3 className="text-sm font-bold text-[#F1F5F9]">Automatic Profile Switching</h3>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EAB308]/10 text-[#EAB308] border border-[#EAB308]/30">
+                          Zero Polling (0.0% CPU)
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#94A3B8] leading-relaxed">
+                        Automatically switch your active profile whenever a configured target application (such as OBS Studio, VS Code, or Premiere Pro) comes into focus.
+                        Powered by event-driven Windows system hooks without polling.
+                      </p>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={settings.auto_profile_switching ?? true}
+                        onChange={(e) => updateSetting('auto_profile_switching', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-5 bg-[#1F2637] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2563EB]"></div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Triple-Escape Emergency Disarm Card */}
+                <div className="p-5 rounded-xl bg-[#111520] border border-[#202736] space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert size={16} className="text-[#EF4444]" />
+                        <h3 className="text-sm font-bold text-[#F1F5F9]">Emergency Disarm (Triple-Escape)</h3>
+                      </div>
+                      <p className="text-xs text-[#94A3B8] leading-relaxed">
+                        If you ever find yourself stuck or need immediate physical numpad restoration, press <strong className="text-white">Escape 3 times</strong> rapidly.
+                        Deck Mode is instantly disarmed and normal keyboard operation is restored.
+                      </p>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={settings.emergency_shortcut_enabled}
+                        onChange={(e) => updateSetting('emergency_shortcut_enabled', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-5 bg-[#1F2637] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2563EB]"></div>
+                    </label>
+                  </div>
+
+                  {onTestEmergencyDisarm && (
+                    <div className="pt-1 flex items-center justify-between border-t border-[#1E2535]">
+                      <span className="text-[11px] text-[#64748B]">Verify disarm reliability</span>
+                      <button
+                        onClick={onTestEmergencyDisarm}
+                        className="py-1 px-3 rounded-md bg-[#EF4444]/15 hover:bg-[#EF4444]/25 text-[#F87171] border border-[#EF4444]/30 text-xs font-semibold cursor-pointer transition-colors"
+                      >
+                        Trigger Test Disarm
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Run on Startup */}
                 <div className="p-4 rounded-xl bg-[#111520] border border-[#202736] flex items-center justify-between">
                   <div className="space-y-0.5 max-w-md">
@@ -197,25 +414,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <div className="w-10 h-5 bg-[#1F2637] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2563EB]"></div>
                   </label>
                 </div>
-
-                {/* Emergency Shortcut */}
-                <div className="p-4 rounded-xl bg-[#111520] border border-[#202736] flex items-center justify-between">
-                  <div className="space-y-0.5 max-w-md">
-                    <span className="text-xs font-bold text-[#F1F5F9] block">Triple-Escape Emergency Disarm</span>
-                    <span className="text-xs text-[#94A3B8] block">
-                      Pressing the Escape key three times in rapid succession immediately disarms Deck Mode.
-                    </span>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.emergency_shortcut_enabled}
-                      onChange={(e) => updateSetting('emergency_shortcut_enabled', e.target.checked)}
-                      className="sr-only peer"
-                    />
-                    <div className="w-10 h-5 bg-[#1F2637] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2563EB]"></div>
-                  </label>
-                </div>
               </div>
             </div>
           )}
@@ -225,15 +423,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="space-y-6">
               <div>
                 <h2 className="text-base font-bold text-[#F8FAFC]">Keyboard & Input</h2>
-                <p className="text-xs text-[#94A3B8]">Manage keypad input detection and hardware calibration.</p>
+                <p className="text-xs text-[#94A3B8]">Manage physical device isolation, USB numpad detection, and hardware calibration.</p>
               </div>
 
               {/* Status Banner */}
               <div className="p-4 rounded-xl bg-[#111520] border border-[#202736] space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#F1F5F9]">Hardware Connection Status</span>
-                  <span className="flex items-center gap-1.5 text-xs text-[#10B981] font-semibold">
-                    <CheckCircle2 size={13} /> Connected & Ready
+                  <span className={`flex items-center gap-1.5 text-xs font-semibold ${
+                    isIsolated && !isTargetConnected ? 'text-[#F59E0B]' : 'text-[#10B981]'
+                  }`}>
+                    <CheckCircle2 size={13} />
+                    {isIsolated 
+                      ? (isTargetConnected ? 'Target Numpad Connected' : 'Target Numpad Disconnected (Pass-through active)') 
+                      : 'All Keyboards Active'}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-xs">
@@ -259,12 +462,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-bold text-[#F1F5F9]">Target Keyboard (Device Isolation)</h3>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#3B82F6]/10 text-[#3B82F6] border border-[#3B82F6]/30">
-                        {settings.target_keyboard_device && settings.target_keyboard_device !== 'all' ? 'Isolated' : 'All Keyboards'}
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        isIsolated
+                          ? (isTargetConnected ? 'bg-[#3B82F6]/10 text-[#3B82F6] border-[#3B82F6]/30' : 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/30')
+                          : 'bg-[#1E2533] text-[#94A3B8] border-[#2A3447]'
+                      }`}>
+                        {isIsolated ? `${activeDeviceName} (${isTargetConnected ? 'Connected' : 'Unplugged'})` : 'All Keyboards'}
                       </span>
                     </div>
                     <p className="text-xs text-[#94A3B8] leading-relaxed">
-                      Choose which physical keyboard NumDeck intercepts. If you use a separate USB numeric keypad, select it here so your main laptop/desktop keyboard types normally and is never suppressed.
+                      Choose which physical keyboard NumDeck intercepts. If you use a separate USB numeric keypad, select it here.
+                      Your laptop's built-in keyboard will type 100% normally and will never be hijacked. If your USB numpad is unplugged,
+                      pass-through is automatically maintained.
                     </p>
                   </div>
 
@@ -290,7 +499,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                         <option value="all">All Keyboards (Default — Any connected keypad)</option>
                         {connectedKeyboards.map((kb) => (
                           <option key={kb.id} value={kb.id}>
-                            {kb.name} {kb.is_internal ? '— Laptop' : ''}
+                            {kb.name} {kb.is_internal ? '— Laptop Keyboard' : '— External USB'}
                           </option>
                         ))}
                       </select>
@@ -411,7 +620,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="space-y-6">
               <div>
                 <h2 className="text-base font-bold text-[#F8FAFC]">About NumDeck</h2>
-                <p className="text-xs text-[#94A3B8]">Application information and credits.</p>
+                <p className="text-xs text-[#94A3B8]">Application information, security auditing, and credits.</p>
               </div>
 
               {/* Application Details Card */}
@@ -421,15 +630,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <Keyboard size={22} strokeWidth={2.5} />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-[#F8FAFC]">NumDeck</h3>
-                    <span className="text-xs text-[#3B82F6] font-semibold">Version 1.0.0 (Release)</span>
+                    <h3 className="text-base font-bold text-[#F8FAFC]">NumDeck 2.0</h3>
+                    <span className="text-xs text-[#3B82F6] font-semibold">Focused Product Upgrade (Release)</span>
                   </div>
                 </div>
 
                 <p className="text-xs text-[#94A3B8] leading-relaxed">
-                  NumDeck transforms any physical numeric keypad into a customizable Stream Deck.
-                  Assign application launches, multimedia controls, complex hotkeys, and frequently typed text macros
-                  to individual numpad keys while maintaining full support for everyday keyboard use.
+                  NumDeck transforms any ordinary physical numeric keypad into a customizable Stream Deck-style control surface.
+                  Featuring Global Deck Mode Hotkeys, Two-Layer secondary keypads, Zero-Polling Automatic Profile Switching, and 
+                  dedicated USB device isolation so laptop keyboards are never hijacked.
                 </p>
 
                 <div className="grid grid-cols-2 gap-3 text-xs pt-1">
@@ -438,8 +647,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <span className="font-bold text-[#F1F5F9]">Windows 10 / 11 (x64)</span>
                   </div>
                   <div className="p-3 rounded-lg bg-[#0C0F17] border border-[#1E2535]">
-                    <span className="text-[#64748B] block text-[11px] mb-0.5">Engine Architecture</span>
-                    <span className="font-bold text-[#F1F5F9]">Tauri 2 + Native Rust</span>
+                    <span className="text-[#64748B] block text-[11px] mb-0.5">Security & Compliance</span>
+                    <span className="font-bold text-[#10B981]">Native Win32 APIs (Zero PowerShell Spawning)</span>
                   </div>
                 </div>
 

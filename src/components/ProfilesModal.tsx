@@ -53,6 +53,7 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
       name: `Profile ${profileList.length + 1}`,
       icon: 'LayoutGrid',
       keys: {},
+      layer_b_keys: {},
       folders: [],
     };
     const updated = [...profileList, newProfile];
@@ -69,6 +70,7 @@ export const ProfilesModal: React.FC<ProfilesModalProps> = ({
       id: newId,
       name: `${source.name} (Copy)`,
       keys: JSON.parse(JSON.stringify(source.keys)),
+      layer_b_keys: source.layer_b_keys ? JSON.parse(JSON.stringify(source.layer_b_keys)) : {},
       folders: JSON.parse(JSON.stringify(source.folders || [])),
       app_association: source.app_association,
     };

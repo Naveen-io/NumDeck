@@ -327,6 +327,10 @@ pub enum ActionConfig {
     },
     BackToRootFolder,
     ToggleDeckMode,
+    ToggleLayer,
+    SwitchLayer {
+        layer: u8,
+    },
     Passthrough,
 }
 
@@ -362,6 +366,8 @@ pub struct Profile {
     pub icon: String,
     pub keys: HashMap<String, KeyAssignment>,
     #[serde(default)]
+    pub layer_b_keys: HashMap<String, KeyAssignment>,
+    #[serde(default)]
     pub folders: Vec<DeckFolder>,
     #[serde(default)]
     pub app_association: Option<String>,
@@ -375,6 +381,30 @@ pub struct KeyboardDeviceInfo {
     pub raw_path: String,
     pub is_internal: bool,
     pub is_virtual: bool,
+    #[serde(default)]
+    pub is_connected: bool,
+}
+
+/// Configurable Global Hotkey to Toggle Deck Mode
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GlobalHotkeyConfig {
+    pub enabled: bool,
+    pub modifiers: Vec<String>, // "ctrl", "alt", "shift", "win"
+    pub key: String,            // "D", "N", "F12", etc.
+}
+
+impl Default for GlobalHotkeyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+            key: "D".to_string(),
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Global Application Settings
@@ -389,6 +419,12 @@ pub struct AppSettings {
     pub minimize_to_tray: bool,
     #[serde(default)]
     pub target_keyboard_device: Option<String>,
+    #[serde(default)]
+    pub global_hotkey: GlobalHotkeyConfig,
+    #[serde(default = "default_true")]
+    pub auto_profile_switching: bool,
+    #[serde(default)]
+    pub active_layer: u8,
 }
 
 impl Default for AppSettings {
@@ -402,6 +438,9 @@ impl Default for AppSettings {
             run_at_startup: false,
             minimize_to_tray: false,
             target_keyboard_device: None,
+            global_hotkey: GlobalHotkeyConfig::default(),
+            auto_profile_switching: true,
+            active_layer: 0,
         }
     }
 }
@@ -732,5 +771,69 @@ mod tests {
         assert_eq!(json, r#"{"type":"Passthrough"}"#);
         let deserialized: ActionConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized, ActionConfig::Passthrough);
+    }
+
+    #[test]
+    fn test_layer_switch_actions_serialization() {
+        let toggle = ActionConfig::ToggleLayer;
+        let toggle_json = serde_json::to_string(&toggle).unwrap();
+        assert_eq!(toggle_json, r#"{"type":"ToggleLayer"}"#);
+        let deserialized_toggle: ActionConfig = serde_json::from_str(&toggle_json).unwrap();
+        assert_eq!(deserialized_toggle, ActionConfig::ToggleLayer);
+
+        let switch = ActionConfig::SwitchLayer { layer: 1 };
+        let switch_json = serde_json::to_string(&switch).unwrap();
+        assert_eq!(switch_json, r#"{"type":"SwitchLayer","payload":{"layer":1}}"#);
+        let deserialized_switch: ActionConfig = serde_json::from_str(&switch_json).unwrap();
+        assert_eq!(deserialized_switch, ActionConfig::SwitchLayer { layer: 1 });
+    }
+
+    #[test]
+    fn test_global_hotkey_serialization() {
+        let hotkey = GlobalHotkeyConfig {
+            enabled: true,
+            modifiers: vec!["ctrl".to_string(), "shift".to_string()],
+            key: "D".to_string(),
+        };
+        let json = serde_json::to_string(&hotkey).unwrap();
+        let deserialized: GlobalHotkeyConfig = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.enabled);
+        assert_eq!(deserialized.modifiers, vec!["ctrl", "shift"]);
+        assert_eq!(deserialized.key, "D");
+    }
+
+    #[test]
+    fn test_profile_with_layer_b_keys() {
+        let mut prof = Profile {
+            id: "test".to_string(),
+            name: "Test Profile".to_string(),
+            icon: "LayoutGrid".to_string(),
+            keys: HashMap::new(),
+            layer_b_keys: HashMap::new(),
+            folders: vec![],
+            app_association: Some("obs64.exe".to_string()),
+        };
+
+        prof.keys.insert("numpad_7".to_string(), KeyAssignment {
+            key_id: "numpad_7".to_string(),
+            label: "Layer A Key".to_string(),
+            icon: "chrome".to_string(),
+            color: None,
+            action: Some(ActionConfig::Passthrough),
+        });
+
+        prof.layer_b_keys.insert("numpad_7".to_string(), KeyAssignment {
+            key_id: "numpad_7".to_string(),
+            label: "Layer B Key".to_string(),
+            icon: "Layers".to_string(),
+            color: Some("#8B5CF6".to_string()),
+            action: Some(ActionConfig::ToggleLayer),
+        });
+
+        let json = serde_json::to_string(&prof).unwrap();
+        let deserialized: Profile = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.keys.get("numpad_7").unwrap().label, "Layer A Key");
+        assert_eq!(deserialized.layer_b_keys.get("numpad_7").unwrap().label, "Layer B Key");
+        assert_eq!(deserialized.app_association, Some("obs64.exe".to_string()));
     }
 }

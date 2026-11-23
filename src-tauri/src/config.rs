@@ -353,6 +353,7 @@ impl ConfigManager {
             name: "General".to_string(),
             icon: "LayoutGrid".to_string(),
             keys,
+            layer_b_keys: HashMap::new(),
             folders: vec![],
             app_association: None,
         }
@@ -575,6 +576,7 @@ impl ConfigManager {
             name: "Gaming".to_string(),
             icon: "Gamepad2".to_string(),
             keys,
+            layer_b_keys: HashMap::new(),
             folders: vec![],
             app_association: Some("steam.exe".to_string()),
         }
@@ -798,6 +800,7 @@ impl ConfigManager {
             name: "Coding".to_string(),
             icon: "Code".to_string(),
             keys,
+            layer_b_keys: HashMap::new(),
             folders: vec![],
             app_association: Some("code.cmd".to_string()),
         }
@@ -1029,6 +1032,7 @@ impl ConfigManager {
             name: "Editing".to_string(),
             icon: "Film".to_string(),
             keys,
+            layer_b_keys: HashMap::new(),
             folders: vec![],
             app_association: Some("Photoshop.exe".to_string()),
         }
@@ -1254,6 +1258,7 @@ impl ConfigManager {
             name: "Streaming".to_string(),
             icon: "Tv".to_string(),
             keys,
+            layer_b_keys: HashMap::new(),
             folders: vec![],
             app_association: Some("obs64.exe".to_string()),
         }
@@ -1478,6 +1483,7 @@ impl ConfigManager {
             name: "Productivity".to_string(),
             icon: "Briefcase".to_string(),
             keys,
+            layer_b_keys: HashMap::new(),
             folders: vec![],
             app_association: Some("excel.exe".to_string()),
         }
